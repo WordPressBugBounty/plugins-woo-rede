@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'lkn/integration-rede-for-woocommerce',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => 'daaa2a027bc055351ccec99ee1c471be9b66ad3f',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -11,18 +11,18 @@
     ),
     'versions' => array(
         'developersrede/erede-php' => array(
-            'pretty_version' => '4.2.1',
-            'version' => '4.2.1.0',
-            'reference' => '69f505357c673fdb59cfa64c19c273e61983aecd',
+            'pretty_version' => '5.1.3',
+            'version' => '5.1.3.0',
+            'reference' => '451f111bf455e0ec7bd74ca14737cc4d0531321d',
             'type' => 'library',
             'install_path' => __DIR__ . '/../developersrede/erede-php',
             'aliases' => array(),
             'dev_requirement' => false,
         ),
         'lkn/integration-rede-for-woocommerce' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => 'daaa2a027bc055351ccec99ee1c471be9b66ad3f',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

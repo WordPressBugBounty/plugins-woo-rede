@@ -2,11 +2,13 @@
 
 namespace Rede\Service;
 
+use Exception;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Rede\Exception\RedeException;
 use Rede\Store;
 use Rede\Transaction;
+use RuntimeException;
 
 abstract class AbstractTransactionsService extends AbstractService
 {
@@ -24,8 +26,8 @@ abstract class AbstractTransactionsService extends AbstractService
      * AbstractTransactionsService constructor.
      *
      * @param Store $store
-     * @param Transaction $transaction
-     * @param LoggerInterface $logger
+     * @param Transaction|null $transaction
+     * @param LoggerInterface|null $logger
      */
     public function __construct(Store $store, Transaction $transaction = null, LoggerInterface $logger = null)
     {
@@ -36,9 +38,9 @@ abstract class AbstractTransactionsService extends AbstractService
 
     /**
      * @return Transaction
-     * @throws \InvalidArgumentException
-     * @throws \RuntimeException
-     * @throws \Rede\Exception\RedeException
+     * @throws InvalidArgumentException
+     * @throws RuntimeException
+     * @throws RedeException
      */
     public function execute()
     {
@@ -54,7 +56,6 @@ abstract class AbstractTransactionsService extends AbstractService
     }
 
     /**
-     *
      * @param string $tid
      */
     public function setTid($tid)
@@ -63,8 +64,8 @@ abstract class AbstractTransactionsService extends AbstractService
     }
 
     /**
-     * @see    AbstractService::getService()
      * @return string
+     * @see    AbstractService::getService()
      */
     protected function getService()
     {
@@ -76,10 +77,10 @@ abstract class AbstractTransactionsService extends AbstractService
      * @param string $statusCode
      *
      * @return Transaction
+     * @throws RedeException
+     * @throws InvalidArgumentException
+     * @throws Exception
      * @see    AbstractService::parseResponse()
-     * @throws \Rede\Exception\RedeException
-     * @throws \InvalidArgumentException
-     * @throws \Exception
      */
     protected function parseResponse($response, $statusCode)
     {

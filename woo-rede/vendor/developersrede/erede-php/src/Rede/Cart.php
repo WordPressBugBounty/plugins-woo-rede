@@ -17,11 +17,6 @@ class Cart implements RedeSerializable
     private $consumer;
 
     /**
-     * @var Environment
-     */
-    private $environment;
-
-    /**
      * @var Iata
      */
     private $iata;
@@ -32,7 +27,6 @@ class Cart implements RedeSerializable
     private $items;
 
     /**
-     *
      * @var Address
      */
     private $shipping;
@@ -46,11 +40,11 @@ class Cart implements RedeSerializable
     {
         $address = new Address();
 
-        if ($type & Address::BILLING == Address::BILLING) {
+        if (($type & Address::BILLING) == Address::BILLING) {
             $this->setBillingAddress($address);
         }
 
-        if ($type & Address::SHIPPING == Address::SHIPPING) {
+        if (($type & Address::SHIPPING) == Address::SHIPPING) {
             $this->setShippingAddress($address);
         }
 
@@ -69,7 +63,6 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @param Address $address
      *
      * @return Cart
@@ -129,7 +122,6 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @return Address
      */
     public function getBillingAddress()
@@ -138,7 +130,6 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @return Consumer
      */
     public function getConsumer()
@@ -147,7 +138,6 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @param Consumer $consumer
      *
      * @return Cart
@@ -159,7 +149,6 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @return Iata
      */
     public function getIata()
@@ -168,7 +157,6 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @param Flight $flight
      *
      * @return $this
@@ -181,23 +169,10 @@ class Cart implements RedeSerializable
     }
 
     /**
-     *
      * @return Address
      */
     public function getShippingAddress()
     {
         return $this->shipping;
     }
-
-    /**
-     * @param Environment $environment
-     *
-     * @return Cart
-     */
-    public function setEnvironment(Environment $environment)
-    {
-        $this->environment = $environment;
-        return $this;
-    }
-
 }

@@ -2,12 +2,13 @@
 
 namespace Rede\Service;
 
+use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Rede\eRede;
+use Rede\Exception\RedeException;
 use Rede\Store;
 use Rede\Transaction;
 use RuntimeException;
-use function Sodium\version_string;
 
 abstract class AbstractService
 {
@@ -44,7 +45,7 @@ abstract class AbstractService
      * AbstractService constructor.
      *
      * @param Store $store
-     * @param LoggerInterface $logger
+     * @param LoggerInterface|null $logger
      */
     public function __construct(Store $store, LoggerInterface $logger = null)
     {
@@ -55,6 +56,7 @@ abstract class AbstractService
     /**
      * @param string $platform
      * @param string $platformVersion
+     *
      * @return $this
      */
     public function platform($platform, $platformVersion)
@@ -67,9 +69,9 @@ abstract class AbstractService
 
     /**
      * @return Transaction
-     * @throws \InvalidArgumentException
-     * @throws \RuntimeException
-     * @throws \Rede\Exception\RedeException
+     * @throws InvalidArgumentException
+     * @throws RuntimeException
+     * @throws RedeException
      */
     abstract public function execute();
 
@@ -78,12 +80,13 @@ abstract class AbstractService
      * @param string $method
      *
      * @return mixed
-     * @throws \RuntimeException
+     * @throws RuntimeException
      */
-    protected function sendRequest($body = null, $method = 'GET')
+    protected function sendRequest($body = '', $method = 'GET')
     {
         $userAgent = sprintf('User-Agent: %s',
-            sprintf(eRede::USER_AGENT, phpversion(), $this->store->getFiliation(), php_uname('s'), php_uname('r'), php_uname('m'))
+            sprintf(eRede::USER_AGENT, phpversion(), $this->store->getFiliation(), php_uname('s'), php_uname('r'),
+                php_uname('m'))
         );
 
         if (!empty($this->platform) && !empty($this->platformVersion)) {
@@ -107,7 +110,8 @@ abstract class AbstractService
             str_replace('  ', ' ',
                 $userAgent
             ),
-            'Accept: application/json'
+            'Accept: application/json',
+            'Transaction-Response: brand-return-opened'
         ];
 
         $this->curl = curl_init($this->store->getEnvironment()->getEndpoint($this->getService()));
@@ -119,11 +123,8 @@ abstract class AbstractService
         );
 
         if (!defined('CURL_SSLVERSION_TLSv1_2')) {
-            define('CURL_SSLVERSION_TLSv1_2', 6);
-
-            if ($this->logger !== null) {
-                $this->logger->alert('Atenção, por motivos de segurança, recomendamos fortemente que você atualize a versão do seu PHP.');
-            }
+            throw new RuntimeException(sprintf('Atenção, sua versão da curl não suporta TLS 1.2 e precisa ser atualizada. Sua versão atual da curl é %s',
+                $curlVersion));
         }
 
         curl_setopt($this->curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
@@ -139,7 +140,7 @@ abstract class AbstractService
                 curl_setopt($this->curl, CURLOPT_CUSTOMREQUEST, $method);
         }
 
-        if ($body !== null) {
+        if (!empty($body)) {
             curl_setopt($this->curl, CURLOPT_POSTFIELDS, $body);
 
             $headers[] = 'Content-Type: application/json; charset=utf8';
@@ -157,33 +158,47 @@ abstract class AbstractService
                         $method,
                         $this->store->getEnvironment()->getEndpoint($this->getService()),
                         implode("\n", $headers),
-                        preg_replace('/"(cardnumber|securitycode)":"[^"]+"/i', '"\1":"***"', $body)
+                        preg_replace('/"(cardHolderName|cardnumber|securitycode)":"[^"]+"/i', '"\1":"***"', $body)
                     )
                 )
             );
         }
 
         $response = curl_exec($this->curl);
-        $statusCode = curl_getinfo($this->curl, CURLINFO_HTTP_CODE);
+        $httpInfo = curl_getinfo($this->curl);
+
+        error_log($response);
 
         if ($this->logger !== null) {
             $this->logger->debug(
                 sprintf("Response Rede\nStatus Code: %s\n\n%s",
-                    $statusCode,
+                    $httpInfo['http_code'],
                     $response
                 )
             );
+
+            foreach ($httpInfo as $key => $info) {
+                if (is_array($info)) {
+                    foreach ($info as $infoKey => $infoValue) {
+                        $this->logger->debug(sprintf('Curl[%s][%s]: %s', $key, $infoKey, $infoValue));
+                    }
+
+                    continue;
+                }
+
+                $this->logger->debug(sprintf('Curl[%s]: %s', $key, $info));
+            }
         }
 
         if (curl_errno($this->curl)) {
-            throw new RuntimeException('Curl error: ' . curl_error($this->curl));
+            throw new RuntimeException(sprintf('Curl error[%s]: %s', curl_errno($this->curl), curl_error($this->curl)));
         }
 
         curl_close($this->curl);
 
         $this->curl = null;
 
-        return $this->parseResponse($response, $statusCode);
+        return $this->parseResponse($response, $httpInfo['http_code']);
     }
 
     /**

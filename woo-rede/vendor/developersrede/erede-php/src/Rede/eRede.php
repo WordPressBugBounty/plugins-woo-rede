@@ -10,7 +10,7 @@ use Rede\Service\GetTransactionService;
 
 class eRede
 {
-    const VERSION = '4.2.1';
+    const VERSION = '5.1.2';
     const USER_AGENT = 'eRede/' . eRede::VERSION . ' (PHP %s; Store %s; %s %s)';
 
     /**
@@ -37,7 +37,7 @@ class eRede
      * eRede constructor.
      *
      * @param Store $store
-     * @param LoggerInterface $logger
+     * @param LoggerInterface|null $logger
      */
     public function __construct(Store $store, LoggerInterface $logger = null)
     {
@@ -47,6 +47,8 @@ class eRede
 
     /**
      * @param string $platform
+     * @param $platformVersion
+     *
      * @return eRede
      */
     public function platform($platform, $platformVersion)
