@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'lkn/integration-rede-for-woocommerce',
-        'pretty_version' => 'dev-main',
-        'version' => 'dev-main',
-        'reference' => 'daaa2a027bc055351ccec99ee1c471be9b66ad3f',
+        'pretty_version' => '1.0.0+no-version-set',
+        'version' => '1.0.0.0',
+        'reference' => null,
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -20,9 +20,9 @@
             'dev_requirement' => false,
         ),
         'lkn/integration-rede-for-woocommerce' => array(
-            'pretty_version' => 'dev-main',
-            'version' => 'dev-main',
-            'reference' => 'daaa2a027bc055351ccec99ee1c471be9b66ad3f',
+            'pretty_version' => '1.0.0+no-version-set',
+            'version' => '1.0.0.0',
+            'reference' => null,
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
