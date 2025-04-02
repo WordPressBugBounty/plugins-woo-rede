@@ -4,7 +4,7 @@ Donate link: https://www.linknacional.com/wordpress/plugins/
 Tags: woocommerce,payment,card,credit
 Requires at least: 5.0
 Tested up to: 6.7.1
-Stable tag: 3.6.2
+Stable tag: 3.7.1
 Requires PHP: 7.2
 License: GPLv3 or later
 License URI: http://www.gnu.org/licenses/gpl-3.0.txt
@@ -72,6 +72,21 @@ The Integration Rede for WooCommerce plugin is now live and working.
 * Have installed the WooCommerce plugin.
 
 == Changelog ==
+# 3.7.1 - 2025/03/18
+* Fix in debit request with Maxipago.
+
+# 3.7.0 - 2025/03/11
+* Add 3DS validation for debit payments with Maxipago;
+* Add endpoint to receive notifications for debit method with Maxipago.
+
+# 3.6.4 - 2025/02/27
+* Add conversion of the total purchase amount;
+- Fixed MaxiPago card fields;
+- Fixed MaxiPAgo API return code detection.
+
+# 3.6.3 - 2025/02/24
+* Fix settings when the PRO plugin is deactivated.
+
 # 3.6.2 - 2025/02/03
 * Fix CVV field validation.
 
