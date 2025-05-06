@@ -5,8 +5,10 @@ namespace Lkn\IntegrationRedeForWoocommerce\Includes;
 use Exception;
 use WC_Order;
 
-final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrationRedeForWoocommerceWcRedeAbstract {
-    public function __construct() {
+final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrationRedeForWoocommerceWcRedeAbstract
+{
+    public function __construct()
+    {
         $this->id = 'maxipago_debit';
         $this->method_title = esc_attr__('Pay with the Maxipago Debit', 'woo-rede');
         $this->method_description = esc_attr__('Enables and configures payments with Maxipago Debit', 'woo-rede');
@@ -42,7 +44,8 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
      *
      * @return bool
      */
-    public function validate_fields() {
+    public function validate_fields()
+    {
         if (empty(sanitize_text_field(wp_unslash($_POST['maxipago_debit_cpf']))) && empty(sanitize_text_field(wp_unslash($_POST['billing_cpf']))) && empty(sanitize_text_field(wp_unslash($_POST['billing_cnpj'])))) {
             wc_add_notice(esc_attr__('CPF is a required field', 'woo-rede'), 'error');
 
@@ -67,7 +70,7 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
             return false;
         }
 
-        if ( ! ctype_digit(sanitize_text_field(wp_unslash($_POST['maxipago_debit_cvc'])))) {
+        if (! ctype_digit(sanitize_text_field(wp_unslash($_POST['maxipago_debit_cvc'])))) {
             wc_add_notice(esc_attr__('Card security code must be a numeric value', 'woo-rede'), 'error');
             return false;
         }
@@ -86,8 +89,9 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         return true;
     }
 
-    public function addNeighborhoodFieldToCheckout($fields) {
-        if ( ! is_plugin_active('woocommerce-extra-checkout-fields-for-brazil/woocommerce-extra-checkout-fields-for-brazil.php')
+    public function addNeighborhoodFieldToCheckout($fields)
+    {
+        if (! is_plugin_active('woocommerce-extra-checkout-fields-for-brazil/woocommerce-extra-checkout-fields-for-brazil.php')
             && $this->is_available()) {
             $fields['billing']['billing_neighborhood'] = array(
                 'label' => __('District', 'woo-rede'),
@@ -113,7 +117,8 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
      *
      * @return array
      */
-    public function getConfigsMaxipagoDebit() {
+    public function getConfigsMaxipagoDebit()
+    {
         $configs = array();
 
         $configs['basePath'] = INTEGRATION_REDE_FOR_WOOCOMMERCE_DIR . 'Includes/logs/';
@@ -123,7 +128,8 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         return $configs;
     }
 
-    public function initFormFields(): void {
+    public function initFormFields(): void
+    {
         LknIntegrationRedeForWoocommerceHelper::updateFixLoadScriptOption($this->id);
 
         wp_enqueue_script(
@@ -231,14 +237,30 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
             )
         );
 
+        if ($this->get_option('debug') == 'yes') {
+            $this->form_fields['show_order_logs'] =  array(
+                'title' => __('Visualizar Log no Pedido', 'woo-rede'),
+                'type' => 'checkbox',
+                'label' => sprintf('Habilita visualização do log da transação dentro do pedido.', 'woo-rede'),
+                'default' => 'no',
+            );
+            $this->form_fields['clear_order_records'] =  array(
+                'title' => __('Limpar logs nos Pedidos', 'woo-rede'),
+                'type' => 'button',
+                'id' => 'validateLicense',
+                'class' => 'woocommerce-save-button components-button is-primary'
+            );
+        }
+
         $customConfigs = apply_filters('integrationRedeGetCustomConfigs', $this->form_fields, array(), $this->id);
 
-        if ( ! empty($customConfigs)) {
+        if (! empty($customConfigs)) {
             $this->form_fields = array_merge($this->form_fields, $customConfigs);
         }
     }
 
-    protected function getCheckoutForm($order_total = 0): void {
+    protected function getCheckoutForm($order_total = 0): void
+    {
         wc_get_template(
             'debitCard/maxipagoPaymentDebitForm.php',
             array(),
@@ -247,7 +269,8 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         );
     }
 
-    public function process_payment($orderId) {
+    public function process_payment($orderId)
+    {
         if (isset($_POST['maxipago_debit_nonce']) && ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['maxipago_debit_nonce'])), 'maxipago_debit_nonce')) {
             return array(
                 'result' => 'fail',
@@ -265,7 +288,7 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         $merchantId = sanitize_text_field($this->get_option('merchant_id'));
         $merchantKey = sanitize_text_field($this->get_option('merchant_key'));
         $referenceNum = uniqid('order_', true);
-        $browser = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+        $browser = isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : '';
 
         $creditExpiry = isset($_POST['maxipago_debit_expiry']) ? sanitize_text_field(wp_unslash($_POST['maxipago_debit_expiry'])) : '';
 
@@ -318,7 +341,7 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
                 throw new Exception(__('One or more invalid fields', 'woo-rede'), 500);
             }
 
-            if ( ! $this->validateCpfCnpj($clientData['billing_cpf'])) {
+            if (! $this->validateCpfCnpj($clientData['billing_cpf'])) {
                 throw new Exception(__("Please enter a valid cpf number", 'woo-rede'));
             }
 
@@ -414,6 +437,36 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
             //Reconstruindo o $xml para facilitar o uso da variavel
             $xml_encode = wp_json_encode($xml);
             $xml_decode = json_decode($xml_encode, true);
+            if ('yes' == $this->debug) {
+                $this->log->log('info', $this->id, array(
+                    'request' => simplexml_load_string($xmlData),
+                    'response' => $xml,
+                    'order' => array(
+                        'orderId' => $orderId,
+                        'amount' => $order->get_total(),
+                        'status' => $order->get_status()
+                    ),
+                ));
+
+
+                $xmlBody = simplexml_load_string($xmlData);
+                $cardNumber = $xmlBody->order->debitSale->transactionDetail->payType->debitCard->number;
+
+                $xmlBody->verification->merchantId = LknIntegrationRedeForWoocommerceHelper::censorString($xmlBody->verification->merchantId, 3);
+                $xmlBody->verification->merchantKey = LknIntegrationRedeForWoocommerceHelper::censorString($xmlBody->verification->merchantKey, 12);
+                $xmlBody->order->debitSale->transactionDetail->payType->debitCard->number = LknIntegrationRedeForWoocommerceHelper::censorString($cardNumber, 8);
+
+                $orderLogsArray = array(
+                    'url' => $apiUrl,
+                    'body' => $xmlBody,
+                    'response' => $xml
+                );
+
+                $orderLogs = json_encode($orderLogsArray);
+                $order->update_meta_data('lknWcRedeOrderLogs', $orderLogs);
+            }
+            throw new Exception(json_encode($orderLogsArray));
+
 
             if (isset($xml_decode['responseCode']) && "0" == $xml_decode['responseCode']) {
                 $order->update_meta_data('_wc_maxipago_transaction_return_message', $xml_decode['processorMessage']);
@@ -428,26 +481,16 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
                 $order->update_meta_data('_wc_maxipago_transaction_expiration', $creditExpiry);
                 $order->update_status('processing');
                 apply_filters("integrationRedeChangeOrderStatus", $order, $this);
-            }elseif(isset($xml_decode['responseCode']) && "1" == $xml_decode['responseCode']){
+            } elseif (isset($xml_decode['responseCode']) && "1" == $xml_decode['responseCode']) {
                 throw new Exception($xml_decode['processorMessage']);
             }
-            if ('yes' == $this->debug) {
-                $this->log->log('info', $this->id, array(
-                    'request' => simplexml_load_string($xmlData),
-                    'response' => $xml,
-                    'order' => array(
-                        'orderId' => $orderId,
-                        'amount' => $order->get_total(),
-                        'status' => $order->get_status()
-                    ),
-                ));
-            }
+
 
             if ("INVALID REQUEST" == $xml_decode['responseMessage']) {
                 throw new Exception($xml_decode['errorMessage']);
             }
             //Caso não exista nenhuma das Message, o Merchant ID ou Merchant Key estão invalidos
-            if ( ! isset($xml_decode['processorMessage']) && ! isset($xml_decode['processorMessage'])) {
+            if (! isset($xml_decode['processorMessage']) && ! isset($xml_decode['processorMessage'])) {
                 throw new Exception(__("Merchant ID or Merchant Key is invalid!", 'woo-rede'));
             }
 
@@ -463,7 +506,7 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
 
         if (isset($xml_decode['authenticationURL'])) {
             $order->update_status('pending');
-    
+
             return array(
                 'result' => 'success',
                 'redirect' => $xml_decode['authenticationURL'],
@@ -476,7 +519,8 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         );
     }
 
-    public function validateCpfCnpj($cpfCnpj) {
+    public function validateCpfCnpj($cpfCnpj)
+    {
         // Remove caracteres especiais
         $cpfCnpj = preg_replace('/[^0-9]/', '', $cpfCnpj);
 
@@ -542,7 +586,8 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         return false;
     }
 
-    public function displayMeta($order): void {
+    public function displayMeta($order): void
+    {
         if ($order->get_payment_method() === 'maxipago_debit') {
             $metaKeys = array(
                 '_wc_maxipago_transaction_environment' => esc_attr__('Environment', 'woo-rede'),
@@ -561,17 +606,18 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         }
     }
 
-    public function checkoutScripts(): void {
+    public function checkoutScripts(): void
+    {
         $plugin_url = plugin_dir_url(LknIntegrationRedeForWoocommerceWcRede::FILE) . '../';
         if ($this->get_option('enabled_fix_load_script') === 'yes') {
             wp_enqueue_script('fixInfiniteLoading-js', $plugin_url . 'Public/js/fixInfiniteLoading.js', array(), '1.0.0', true);
         }
 
-        if ( ! is_checkout()) {
+        if (! is_checkout()) {
             return;
         }
 
-        if ( ! $this->is_available()) {
+        if (! $this->is_available()) {
             return;
         }
 
@@ -591,4 +637,3 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoDebit extends LknIntegrati
         apply_filters('integrationRedeSetCustomCSSPro', get_option('woocommerce_maxipago_debit_settings')['custom_css_short_code'] ?? false);
     }
 }
-?>
