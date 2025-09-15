@@ -23,6 +23,8 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             'refunds',
         );
 
+        $this->icon = LknIntegrationRedeForWoocommerceHelper::getUrlIcon();
+
         $this->initFormFields();
 
         $this->init_settings();
@@ -368,11 +370,13 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         wp_enqueue_style('woo-rede-style', $plugin_url . 'Public/css/rede/styleRedeCredit.css', array(), '1.0.0', 'all');
 
         wp_enqueue_script('woo-rede-js', $plugin_url . 'Public/js/creditCard/rede/wooRedeCredit.js', array(), '1.0.0', true);
+        wp_localize_script('woo-rede-js', 'wooRedeVars', array(
+            'debug' => defined('WP_DEBUG') && WP_DEBUG,
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('rede_payment_fields_nonce'),
+        ));
         wp_enqueue_script('woo-rede-animated-card-jquery', $plugin_url . 'Public/js/jquery.card.js', array('jquery', 'woo-rede-js'), '2.5.0', true);
 
-        wp_localize_script('woo-rede-js', 'wooRede', array(
-            'debug' => defined('WP_DEBUG') && WP_DEBUG,
-        ));
 
         apply_filters('integrationRedeSetCustomCSSPro', get_option('woocommerce_rede_credit_settings')['custom_css_short_code'] ?? false);
     }
@@ -512,10 +516,6 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 );
             }
 
-            if ($this->get_option('installment_interest') == 'yes' || $this->get_option('installment_discount') == 'yes') {
-                $order_total = apply_filters('integrationRedeGetInterest', $order_total, $interest, $installments, 'total', $this, $order_id);
-            }
-
             $order_total = wc_format_decimal($order_total, $decimals);
 
             try {
@@ -650,7 +650,6 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             $decimals = $order->get_meta('_wc_rede_decimal_value');
             $amount_converted = $order->get_meta('_wc_rede_total_amount_converted');
             $order_currency = method_exists($order, 'get_currency') ? $order->get_currency() : 'BRL';
-            $amount = $order->get_total();
 
             if (!empty($order->get_meta('_wc_rede_transaction_canceled'))) {
                 $order->add_order_note('Rede[Refund Error] ' . esc_attr__('Total refund already processed, check the order notes block.', 'woo-rede'));
@@ -658,14 +657,14 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 return false;
             }
 
-            if (! $order || ! $order->get_transaction_id()) {
+            if (! $order || ! $order->get_meta('_wc_rede_transaction_id')) {
                 $order->add_order_note('Rede[Refund Error] ' . esc_attr__('Order or transaction invalid for refund.', 'woo-rede'));
                 $order->save();
                 return false;
             }
 
             if (empty($order->get_meta('_wc_rede_transaction_canceled'))) {
-                $tid = $order->get_transaction_id();
+                $tid = $order->get_meta('_wc_rede_transaction_id');
                 $amount = wc_format_decimal($amount, 2);
 
                 // Se conversão está ativa, usa o valor convertido
@@ -679,11 +678,11 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
 
                 try {
                     if ($amount > 0) {
-                        if (isset($amount) && $amount > 0 && $amount < $totalAmount) {
-                        $order->add_order_note('Rede[Refund Error] ' . esc_attr__('Partial refunds are not allowed. You must refund the total order amount.', 'woo-rede'));
+                        if (isset($amount) && ($amount > 0 && $amount < $totalAmount) || ($is_converted && $amount > 0 && $amount < $amount_converted)) {
+                            $order->add_order_note('Rede[Refund Error] ' . esc_attr__('Partial refunds are not allowed. You must refund the total order amount.', 'woo-rede'));
                             $order->save();
                             return false;
-                        } elseif ($order->get_total() == $amount || $is_converted) {
+                        } elseif ($order->get_total() == $amount || ($is_converted && $amount == $amount_converted)) {
                             $transaction = $this->api->do_transaction_cancellation($tid, $amount);
                         }
 
@@ -748,5 +747,20 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             'woocommerce/rede/',
             LknIntegrationRedeForWoocommerceWcRede::getTemplatesPath()
         );
+    }
+    /**
+     * Renderiza os campos de pagamento com total atualizado (para AJAX)
+     */
+    public function render_payment_fields_with_total($order_total = null): void
+    {
+        if ($description = $this->get_description()) {
+            echo wp_kses_post(wpautop($description));
+        }
+
+        if ($order_total === null) {
+            $order_total = $this->get_cart_subtotal_without_taxes();
+        }
+
+        $this->getCheckoutForm($order_total);
     }
 }
