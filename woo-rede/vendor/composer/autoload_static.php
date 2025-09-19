@@ -4,13 +4,9 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInitd8548a6eebac6bfdff1ada641023832c
+class ComposerStaticInitfc08f954f62dda9dbc3c09c6d265fc5c
 {
     public static $prefixLengthsPsr4 = array (
-        'R' => 
-        array (
-            'Rede\\' => 5,
-        ),
         'P' => 
         array (
             'Psr\\Log\\' => 8,
@@ -21,34 +17,30 @@ class ComposerStaticInitd8548a6eebac6bfdff1ada641023832c
         ),
         'L' => 
         array (
-            'Lkn\\IntegrationRedeForWoocommerce\\PublicView\\' => 45,
-            'Lkn\\IntegrationRedeForWoocommerce\\Includes\\' => 43,
-            'Lkn\\IntegrationRedeForWoocommerce\\Admin\\' => 40,
+            'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\PublicView\\' => 55,
+            'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\Includes\\' => 53,
+            'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\Admin\\' => 50,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'Rede\\' => 
-        array (
-            0 => __DIR__ . '/..' . '/developersrede/erede-php/src/Rede',
-        ),
         'Psr\\Log\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/log/Psr/Log',
+            0 => __DIR__ . '/..' . '/psr/log/src',
         ),
         'Monolog\\' => 
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
         ),
-        'Lkn\\IntegrationRedeForWoocommerce\\PublicView\\' => 
+        'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\PublicView\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Public',
         ),
-        'Lkn\\IntegrationRedeForWoocommerce\\Includes\\' => 
+        'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\Includes\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Includes',
         ),
-        'Lkn\\IntegrationRedeForWoocommerce\\Admin\\' => 
+        'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\Admin\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Admin',
         ),
@@ -61,9 +53,9 @@ class ComposerStaticInitd8548a6eebac6bfdff1ada641023832c
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInitd8548a6eebac6bfdff1ada641023832c::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInitd8548a6eebac6bfdff1ada641023832c::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInitd8548a6eebac6bfdff1ada641023832c::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInitfc08f954f62dda9dbc3c09c6d265fc5c::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInitfc08f954f62dda9dbc3c09c6d265fc5c::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInitfc08f954f62dda9dbc3c09c6d265fc5c::$classMap;
 
         }, null, ClassLoader::class);
     }

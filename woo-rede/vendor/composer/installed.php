@@ -1,6 +1,6 @@
 <?php return array(
     'root' => array(
-        'name' => 'lkn/integration-rede-for-woocommerce',
+        'name' => 'lkn/fraud-scam-detection-woocommerce',
         'pretty_version' => '1.0.0+no-version-set',
         'version' => '1.0.0.0',
         'reference' => null,
@@ -10,16 +10,7 @@
         'dev' => false,
     ),
     'versions' => array(
-        'developersrede/erede-php' => array(
-            'pretty_version' => '5.1.3',
-            'version' => '5.1.3.0',
-            'reference' => '451f111bf455e0ec7bd74ca14737cc4d0531321d',
-            'type' => 'library',
-            'install_path' => __DIR__ . '/../developersrede/erede-php',
-            'aliases' => array(),
-            'dev_requirement' => false,
-        ),
-        'lkn/integration-rede-for-woocommerce' => array(
+        'lkn/fraud-scam-detection-woocommerce' => array(
             'pretty_version' => '1.0.0+no-version-set',
             'version' => '1.0.0.0',
             'reference' => null,
@@ -29,18 +20,18 @@
             'dev_requirement' => false,
         ),
         'monolog/monolog' => array(
-            'pretty_version' => '2.9.2',
-            'version' => '2.9.2.0',
-            'reference' => '437cb3628f4cf6042cc10ae97fc2b8472e48ca1f',
+            'pretty_version' => '3.9.0',
+            'version' => '3.9.0.0',
+            'reference' => '10d85740180ecba7896c87e06a166e0c95a0e3b6',
             'type' => 'library',
             'install_path' => __DIR__ . '/../monolog/monolog',
             'aliases' => array(),
             'dev_requirement' => false,
         ),
         'psr/log' => array(
-            'pretty_version' => '1.1.4',
-            'version' => '1.1.4.0',
-            'reference' => 'd49695b909c3b7628b6289db5479a1c204601f11',
+            'pretty_version' => '3.0.2',
+            'version' => '3.0.2.0',
+            'reference' => 'f16e1d5863e37f8d8c2a01719f5b34baa2b714d3',
             'type' => 'library',
             'install_path' => __DIR__ . '/../psr/log',
             'aliases' => array(),
@@ -49,7 +40,7 @@
         'psr/log-implementation' => array(
             'dev_requirement' => false,
             'provided' => array(
-                0 => '1.0.0 || 2.0.0 || 3.0.0',
+                0 => '3.0.0',
             ),
         ),
     ),
