@@ -6,9 +6,10 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
-    'Psr\\Log\\' => array($vendorDir . '/psr/log/src'),
+    'Rede\\' => array($vendorDir . '/developersrede/erede-php/src/Rede'),
+    'Psr\\Log\\' => array($vendorDir . '/psr/log/Psr/Log'),
     'Monolog\\' => array($vendorDir . '/monolog/monolog/src/Monolog'),
-    'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\PublicView\\' => array($baseDir . '/Public'),
-    'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\Includes\\' => array($baseDir . '/Includes'),
-    'Lkn\\FsdwFraudAndScamDetectionForWoocommerce\\Admin\\' => array($baseDir . '/Admin'),
+    'Lkn\\IntegrationRedeForWoocommerce\\PublicView\\' => array($baseDir . '/Public'),
+    'Lkn\\IntegrationRedeForWoocommerce\\Includes\\' => array($baseDir . '/Includes'),
+    'Lkn\\IntegrationRedeForWoocommerce\\Admin\\' => array($baseDir . '/Admin'),
 );
