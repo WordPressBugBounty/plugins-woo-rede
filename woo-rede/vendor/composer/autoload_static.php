@@ -4,51 +4,43 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInitd8548a6eebac6bfdff1ada641023832c
+class ComposerStaticInit2c3954392a1c2f6394e79826bad4b813
 {
     public static $prefixLengthsPsr4 = array (
-        'R' => 
-        array (
-            'Rede\\' => 5,
-        ),
-        'P' => 
+        'P' =>
         array (
             'Psr\\Log\\' => 8,
         ),
-        'M' => 
+        'M' =>
         array (
             'Monolog\\' => 8,
         ),
-        'L' => 
+        'L' =>
         array (
-            'Lkn\\IntegrationRedeForWoocommerce\\PublicView\\' => 45,
-            'Lkn\\IntegrationRedeForWoocommerce\\Includes\\' => 43,
-            'Lkn\\IntegrationRedeForWoocommerce\\Admin\\' => 40,
+            'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' => 48,
+            'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' => 46,
+            'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' => 43,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'Rede\\' => 
+        'Psr\\Log\\' =>
         array (
-            0 => __DIR__ . '/..' . '/developersrede/erede-php/src/Rede',
+            0 => __DIR__ . '/..' . '/psr/log/src',
         ),
-        'Psr\\Log\\' => 
-        array (
-            0 => __DIR__ . '/..' . '/psr/log/Psr/Log',
-        ),
-        'Monolog\\' => 
+        'Monolog\\' =>
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
         ),
-        'Lkn\\IntegrationRedeForWoocommerce\\PublicView\\' => 
+        'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' =>
         array (
             0 => __DIR__ . '/../..' . '/Public',
         ),
-        'Lkn\\IntegrationRedeForWoocommerce\\Includes\\' => 
+        'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' =>
         array (
             0 => __DIR__ . '/../..' . '/Includes',
         ),
-        'Lkn\\IntegrationRedeForWoocommerce\\Admin\\' => 
+        'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' =>
         array (
             0 => __DIR__ . '/../..' . '/Admin',
         ),
@@ -61,9 +53,9 @@ class ComposerStaticInitd8548a6eebac6bfdff1ada641023832c
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInitd8548a6eebac6bfdff1ada641023832c::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInitd8548a6eebac6bfdff1ada641023832c::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInitd8548a6eebac6bfdff1ada641023832c::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit2c3954392a1c2f6394e79826bad4b813::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit2c3954392a1c2f6394e79826bad4b813::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit2c3954392a1c2f6394e79826bad4b813::$classMap;
 
         }, null, ClassLoader::class);
     }

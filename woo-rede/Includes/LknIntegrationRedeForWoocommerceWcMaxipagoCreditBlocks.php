@@ -1,9 +1,9 @@
 <?php
 
-namespace Lkn\IntegrationRedeForWoocommerce\Includes;
+namespace Lknwoo\IntegrationRedeForWoocommerce\Includes;
 
 use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
-use Lkn\IntegrationRedeForWoocommerce\Includes\LknIntegrationRedeForWoocommerceWcMaxipagoCredit;
+use Lknwoo\IntegrationRedeForWoocommerce\Includes\LknIntegrationRedeForWoocommerceWcMaxipagoCredit;
 
 final class LknIntegrationRedeForWoocommerceWcMaxipagoCreditBlocks extends AbstractPaymentMethodType
 {
@@ -37,11 +37,19 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoCreditBlocks extends Abstr
             '1.0.0',
             true
         );
+        wp_localize_script(
+            'maxipago_credit-blocks-integration',
+            'maxipagoCreditAjax',
+            array(
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce'   => wp_create_nonce('maxipagoCardNonce'),
+            )
+        );
         if (function_exists('wp_set_script_translations')) {
             wp_set_script_translations('maxipago_credit-blocks-integration');
         }
 
-        apply_filters('integrationRedeSetCustomCSSPro', get_option('woocommerce_maxipago_credit_settings')['custom_css_block_editor'] ?? false);
+        apply_filters('integration_rede_for_woocommerce_set_custom_css', get_option('woocommerce_maxipago_credit_settings')['custom_css_block_editor'] ?? false);
 
         return array('maxipago_credit-blocks-integration');
     }
@@ -79,9 +87,9 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoCreditBlocks extends Abstr
         ) {
             for ($i = 1; $i <= $maxParcels; ++$i) {
                 $parcelAmount = $cart_total / $i;
-                if ($parcelAmount >= $minParcelValue && isset($settings[$i . 'x'])) {
+                if (($i === 1 || $parcelAmount >= $minParcelValue) && isset($settings[$i . 'x'])) {
                     $interest = round((float) $settings[$i . 'x'], 2);
-                    $customLabel = apply_filters('integrationRedeGetInterest', $cart_total, $interest, $i, 'label', $this->gateway);
+                    $customLabel = LknIntegrationRedeForWoocommerceHelper::lknIntegrationRedeProRedeInterest($cart_total, $interest, $i, 'label', $this->gateway);
                     if ($customLabel) {
                         $phpArray[$i . 'x'] = $customLabel;
                     }
@@ -90,7 +98,7 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoCreditBlocks extends Abstr
         } else {
             for ($i = 1; $i <= $maxParcels; ++$i) {
                 $parcelAmount = $cart_total / $i;
-                if ($parcelAmount >= $minParcelValue) {
+                if ($i === 1 || $parcelAmount >= $minParcelValue) {
                     $phpArray[$i . 'x'] = html_entity_decode(sprintf('%dx de %s', $i, wp_strip_all_tags(wc_price($parcelAmount))));
                 }
             }

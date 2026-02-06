@@ -1,6 +1,6 @@
 <?php
 
-namespace Lkn\IntegrationRedeForWoocommerce\Includes;
+namespace Lknwoo\IntegrationRedeForWoocommerce\Includes;
 
 use Exception;
 use WC_Logger;
@@ -103,11 +103,40 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
                 'label' => esc_attr__('Authorization code', 'woo-rede'),
                 'value' => $authorization_code,
             );
-            if ($installments) {
-                $items['installments'] = array(
-                    'label' => esc_attr__('Installments', 'woo-rede'),
-                    'value' => $installments,
+            
+            // Lógica específica para rede_debit: mostrar tipo de cartão e parcelas conforme o tipo
+            if ($this->id === 'rede_debit') {
+                $card_type = $order->get_meta('_wc_rede_card_type') ?: 'debit';
+                $saved_installments = $order->get_meta('_wc_rede_installments') ?: 1;
+                
+                $items['cardType'] = array(
+                    'label' => esc_attr__('Card Type', 'woo-rede'),
+                    'value' => ucfirst($card_type),
                 );
+                
+                // Só mostra parcelas se for crédito
+                if ($card_type === 'credit') {
+                    if ($saved_installments == 1) {
+                        $installment_text = 'Cash payment';
+                    } else {
+                        $order_total = $order->get_total();
+                        $installment_value = $order_total / $saved_installments;
+                        $installment_text = sprintf('%dx of %s', $saved_installments, wc_price($installment_value));
+                    }
+                    
+                    $items['installments'] = array(
+                        'label' => esc_attr__('Installments', 'woo-rede'),
+                        'value' => $installment_text,
+                    );
+                }
+            } else {
+                // Para outros gateways, usar a lógica original
+                if ($installments) {
+                    $items['installments'] = array(
+                        'label' => esc_attr__('Installments', 'woo-rede'),
+                        'value' => $installments,
+                    );
+                }
             }
 
             $items[] = $last;
@@ -174,26 +203,41 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
 
         if (0 < $order_id) {
             $order = new WC_Order($order_id);
-            // Para pedidos existentes, calcula subtotal + frete - desconto de cupons
-            $subtotal = (float) $order->get_subtotal() + (float) $order->get_shipping_total() - (float) $order->get_discount_total();
+            // Para pedidos existentes, calcula subtotal + frete + impostos - desconto de cupons + taxas
+            $subtotal = (float) $order->get_subtotal() + (float) $order->get_shipping_total() + (float) $order->get_total_tax() - (float) $order->get_discount_total();
+            
+            // Adicionar taxas (fees) do pedido, excluindo fees do próprio plugin
+            foreach ($order->get_fees() as $fee) {
+                // Ignorar fees criados pelo próprio plugin
+                if ($fee->get_name() !== __('Interest', 'woo-rede') && 
+                    $fee->get_name() !== __('Discount', 'woo-rede')) {
+                    $subtotal += (float) $fee->get_amount();
+                }
+            }
+            
         } elseif (isset($woocommerce->cart) && $woocommerce->cart) {
-            // Para carrinho, pega subtotal + frete - desconto de cupons
-            $subtotal = (float) $woocommerce->cart->get_subtotal() + (float) $woocommerce->cart->get_shipping_total() - (float) $woocommerce->cart->get_discount_total();
+            // Para carrinho, pega subtotal + frete + impostos - desconto de cupons + taxas
+            $subtotal = (float) $woocommerce->cart->get_subtotal() + (float) $woocommerce->cart->get_shipping_total() + (float) $woocommerce->cart->get_taxes_total() - (float) $woocommerce->cart->get_discount_total();
+            
+            // Forçar recálculo do carrinho para garantir que as taxas estejam atualizadas
+            $woocommerce->cart->calculate_totals();
+            
+            // Adicionar taxas (fees) do carrinho, excluindo fees do próprio plugin
+            foreach ($woocommerce->cart->get_fees() as $fee) {
+                // Ignorar fees criados pelo próprio plugin
+                if ($fee->name !== __('Interest', 'woo-rede') && 
+                    $fee->name !== __('Discount', 'woo-rede')) {
+                    $subtotal += (float) $fee->amount;
+                }
+            }
         }
 
         return $subtotal;
     }
 
-    final public function consult_order($order, $id, $tid, $status): void
-    {
-        $transaction = $this->api->do_transaction_consultation($tid);
-
-        $this->process_order_status($order, $transaction, esc_attr_e('automatic check', 'woo-rede'));
-    }
-
     /**
      * @param $order
-     * @param \Rede\Transaction $transaction
+     * @param mixed $transaction - Objeto de transação (format pode variar)
      * @param string $note
      */
     final public function process_order_status($order, $transaction, $note = ''): void
@@ -202,17 +246,21 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
 
         $order->add_order_note($status_note . ' ' . $note);
 
-        if ($transaction->getReturnCode() == '00') {
-            if ($transaction->getCapture()) {
-                $order->update_status('processing');
-                apply_filters("integrationRedeChangeOrderStatus", $order, $this);
+        // Só altera o status se o pedido estiver pendente
+        if ($order->get_status() === 'pending') {
+            if ($transaction->getReturnCode() == '00') {
+                if ($transaction->getCapture()) {
+                    // Status configurável pelo usuário para pagamentos aprovados
+                    $payment_complete_status = $this->get_option('payment_complete_status', 'processing');
+                    $order->update_status($payment_complete_status);
+                    apply_filters("integration_rede_for_woocommerce_change_order_status", $order, $this);
+                } else {
+                    $order->update_status('on-hold');
+                    wc_reduce_stock_levels($order->get_id());
+                }
             } else {
-                $order->update_status('on-hold');
-                wc_reduce_stock_levels($order->get_id());
+                $order->update_status('failed', $status_note);
             }
-        } else {
-            $order->update_status(esc_attr_e('failed', 'woo-rede'), $status_note);
-            $order->update_status(esc_attr_e('cancelled', 'woo-rede'), $status_note);
         }
 
         WC()->cart->empty_cart();
@@ -225,7 +273,7 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
         if (defined('WC_VERSION') && version_compare(WC_VERSION, '2.1', '>=')) {
             $order_url = $order->get_view_order_url();
         } else {
-            // FIXME - This function is depreciated and needs to be updated see alternative for woocommerce_get_page_id
+            // Legacy support for WooCommerce < 2.1
             $order_url = add_query_arg('order', $order_id, get_permalink(woocommerce_get_page_id('view_order')));
         }
 

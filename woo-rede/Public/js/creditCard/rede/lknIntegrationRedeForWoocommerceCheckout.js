@@ -9,10 +9,33 @@ const translationsRedeCredit = settingsRedeCredit.translations;
 const minInstallmentsRede = settingsRedeCredit.minInstallmentsRede.replace(',', '.');
 const ContentRedeCredit = props => {
   const totalAmountFloat = settingsRedeCredit.cartTotal;
-  const [selectedValue, setSelectedValue] = window.wp.element.useState('');
+  const [selectedValue, setSelectedValue] = window.wp.element.useState('1');
   const handleSortChange = event => {
-    setSelectedValue(event.target.value);
-    updateCreditObject('rede_credit_installments', event.target.value);
+    const value = String(event.target.value); // Garante que seja string
+    setSelectedValue(value);
+    updateCreditObject('rede_credit_installments', value);
+    
+    // Faz requisição AJAX para atualizar a sessão de parcelas
+    window.jQuery.ajax({
+      url: window.redeCreditAjax?.ajaxurl || window.ajaxurl || '/wp-admin/admin-ajax.php',
+      type: 'POST',
+      dataType: 'json',
+      data: {
+        action: 'lkn_update_installment_session',
+        payment_method: 'rede_credit',
+        installments: value,
+        nonce: window.redeCreditAjax?.installment_nonce
+      },
+      success: function (response) {
+        // Invalida o cache do store para atualizar os dados apenas no sucesso da requisição
+        if (window.wp && window.wp.data && window.wp.data.dispatch) {
+          window.wp.data.dispatch('wc/store/cart').invalidateResolutionForStore();
+        }
+      },
+      error: function () {
+        // Em caso de erro, pode manter o comportamento atual ou mostrar uma mensagem
+      }
+    });
   };
   const {
     eventRegistration,
@@ -29,98 +52,12 @@ const ContentRedeCredit = props => {
     rede_credit_cvc: '',
     rede_credit_holder_name: ''
   });
+  
   const [focus, setFocus] = window.wp.element.useState('');
   const [options, setOptions] = window.wp.element.useState([]);
 
-  // Função para buscar dados atualizados do backend e gerar as opções de installments
-  const generateInstallmentOptions = async () => {
-    try {
-      window.jQuery.ajax({
-        url: window.ajaxurl || '/wp-admin/admin-ajax.php',
-        type: 'POST',
-        dataType: 'json',
-        data: {
-          action: 'lkn_get_rede_credit_data'
-        },
-        success: function (response) {
-          if (response && Array.isArray(response.installments)) {
-            // Remove tags HTML do label para exibir texto plano
-            const plainOptions = response.installments.map(opt => {
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = opt.label;
-              return {
-                ...opt,
-                label: tempDiv.textContent || tempDiv.innerText || ''
-              };
-            });
-            setOptions(plainOptions);
-          }
-        },
-        error: function () {
-          // Se falhar, mantém as opções atuais
-        }
-      });
-    } catch (error) {
-      // Se falhar, mantém as opções atuais
-    }
-  };
-
-  // Intercepta window.fetch para WooCommerce Blocks e atualiza parcelas após requisições relevantes
-  window.wp.element.useEffect(() => {
-    generateInstallmentOptions();
-    // Intercepta fetch
-    const originalFetch = window.fetch;
-    window.fetch = async function (...args) {
-      const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-      const isWooBlocksRequest = url.includes('/wp-json/wc/store/v1/batch') || url.includes('/wp-json/wc/store/v1/cart/select-shipping-rate') || url.includes('/wp-json/wc/store/v1/cart');
-      const response = await originalFetch.apply(this, args);
-      if (isWooBlocksRequest) {
-        response.clone().json().then(() => {
-          generateInstallmentOptions();
-        }).catch(() => {
-          generateInstallmentOptions();
-        });
-      }
-      return response;
-    };
-
-    // Intercepta XMLHttpRequest
-    const originalOpen = window.XMLHttpRequest.prototype.open;
-    window.XMLHttpRequest.prototype.open = function (...args) {
-      this._url = args[1];
-      return originalOpen.apply(this, args);
-    };
-    const originalSend = window.XMLHttpRequest.prototype.send;
-    window.XMLHttpRequest.prototype.send = function (...args) {
-      this.addEventListener('load', function () {
-        if (this._url && (
-          this._url.includes('/wp-json/wc/store/v1/batch') ||
-          this._url.includes('/wp-json/wc/store/v1/cart/select-shipping-rate')
-        )) {
-          generateInstallmentOptions();
-        }
-      });
-      return originalSend.apply(this, args);
-    };
-
-    return () => {
-      window.fetch = originalFetch;
-      window.XMLHttpRequest.prototype.open = originalOpen;
-      window.XMLHttpRequest.prototype.send = originalSend;
-    };
-  }, []);
-
-  // Observa eventos de atualização do WooCommerce Blocks (cart/checkout)
-  // ...removido: useEffect de eventos, agora só observa cartTotal...
-  const formatCreditCardNumber = value => {
-    if (value?.length > 19) return creditObject.rede_credit_number;
-    // Remove caracteres não numéricos
-    const cleanedValue = value?.replace(/\D/g, '');
-    // Adiciona espaços a cada quatro dígitos
-    const formattedValue = cleanedValue?.replace(/(.{4})/g, '$1 ')?.trim();
-    return formattedValue;
-  };
-  const updateCreditObject = (key, value) => {
+  // useCallback para estabilizar a função updateCreditObject
+  const updateCreditObject = window.wp.element.useCallback((key, value) => {
     let isValidDate = false;
     switch (key) {
       case 'rede_credit_expiry':
@@ -139,10 +76,10 @@ const ContentRedeCredit = props => {
           }
 
           // Atualiza o estado
-          setCreditObject({
-            ...creditObject,
+          setCreditObject(prevState => ({
+            ...prevState,
             [key]: formattedValue
-          });
+          }));
         }
         return;
       case 'rede_credit_cvc':
@@ -151,44 +88,125 @@ const ContentRedeCredit = props => {
       default:
         break;
     }
-    setCreditObject({
-      ...creditObject,
+    setCreditObject(prevState => ({
+      ...prevState,
       [key]: value
+    }));
+  }, []); // Sem dependências pois usa função de atualização
+
+  // useCallback para estabilizar generateRedeInstallmentOptions
+  const generateRedeInstallmentOptions = window.wp.element.useCallback(() => {
+    window.jQuery.ajax({
+      url: window.redeCreditAjax?.ajaxurl || window.ajaxurl || '/wp-admin/admin-ajax.php',
+      type: 'POST',
+      dataType: 'json',
+      data: {
+        action: 'lkn_get_rede_credit_data',
+        nonce: window.redeCreditAjax?.nonce || nonceRedeCredit
+      },
+      success: function (response) {
+        if (response && Array.isArray(response.installments)) {
+          const plainOptions = response.installments.map(opt => {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = opt.label;
+            return {
+              ...opt,
+              label: tempDiv.textContent || tempDiv.innerText || ''
+            };
+          });
+          
+          setOptions(plainOptions);
+          
+          // Invalida o cache do store após atualizar as opções
+          if (window.wp && window.wp.data && window.wp.data.dispatch) {
+            window.wp.data.dispatch('wc/store/cart').invalidateResolutionForStore();
+          }
+        }
+      }
     });
-  };
+  }, []);
+
+  // Intercepta requisições para atualizar parcelas após mudanças no shipping
+  window.wp.element.useEffect(() => {
+    generateRedeInstallmentOptions();
+
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      const [url, options] = args;
+      
+      if (url && url.includes('/wp-json/wc/store/v1/cart/select-shipping-rate')) {
+        return originalFetch.apply(this, args).then(response => {
+          if (response.ok) {
+            setTimeout(() => {
+              setOptions([]);
+              setSelectedValue('1');
+              updateCreditObject('rede_credit_installments', '1');
+              generateRedeInstallmentOptions();
+            }, 500);
+          }
+          return response;
+        }).catch(error => {
+          return originalFetch.apply(this, args);
+        });
+      }
+      
+      return originalFetch.apply(this, args);
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [generateRedeInstallmentOptions, updateCreditObject]);
+
+  // formatCreditCardNumber como useCallback
+  const formatCreditCardNumber = window.wp.element.useCallback((value) => {
+    if (value?.length > 19) return creditObject.rede_credit_number;
+    const cleanedValue = value?.replace(/\D/g, '');
+    return cleanedValue?.replace(/(.{4})/g, '$1 ')?.trim();
+  }, [creditObject.rede_credit_number]);
+
+  // useEffect otimizado sem creditObject como dependência
   window.wp.element.useEffect(() => {
     const unsubscribe = onPaymentSetup(async () => {
-      // Verifica se todos os campos do creditObject estão preenchidos
-      const allFieldsFilled = Object.values(creditObject).every(field => field.trim() !== '');
-      if (allFieldsFilled) {
-        return {
-          type: emitResponse.responseTypes.SUCCESS,
-          meta: {
-            paymentMethodData: {
-              rede_credit_number: creditObject.rede_credit_number,
-              rede_credit_installments: creditObject.rede_credit_installments,
-              rede_credit_expiry: creditObject.rede_credit_expiry,
-              rede_credit_cvc: creditObject.rede_credit_cvc,
-              rede_credit_holder_name: creditObject.rede_credit_holder_name,
-              rede_card_nonce: nonceRedeCredit
-            }
+      // Usa uma ref ou callback para obter o estado atual
+      return new Promise((resolve) => {
+        setCreditObject(currentState => {
+          const allFieldsFilled = Object.values(currentState).every(field => {
+            const fieldStr = typeof field === 'string' ? field : String(field);
+            return fieldStr.trim() !== '';
+          });
+          
+          if (allFieldsFilled) {
+            resolve({
+              type: emitResponse.responseTypes.SUCCESS,
+              meta: {
+                paymentMethodData: {
+                  rede_credit_number: currentState.rede_credit_number,
+                  rede_credit_installments: currentState.rede_credit_installments,
+                  rede_credit_expiry: currentState.rede_credit_expiry,
+                  rede_credit_cvc: currentState.rede_credit_cvc,
+                  rede_credit_holder_name: currentState.rede_credit_holder_name,
+                  rede_card_nonce: nonceRedeCredit
+                }
+              }
+            });
+          } else {
+            resolve({
+              type: emitResponse.responseTypes.ERROR,
+              message: translationsRedeCredit.fieldsNotFilled
+            });
           }
-        };
-      }
-      return {
-        type: emitResponse.responseTypes.ERROR,
-        message: translationsRedeCredit.fieldsNotFilled
-      };
+          
+          return currentState; // Retorna o estado sem modificá-lo
+        });
+      });
     });
 
-    // Cancela a inscrição quando este componente é desmontado.
     return () => {
       unsubscribe();
     };
-  }, [creditObject,
-    // Adiciona creditObject como dependência
-    emitResponse.responseTypes.ERROR, emitResponse.responseTypes.SUCCESS, onPaymentSetup, translationsRedeCredit // Adicione translationsRedeCredit como dependência
-  ]);
+  }, [onPaymentSetup, emitResponse.responseTypes.SUCCESS, emitResponse.responseTypes.ERROR, translationsRedeCredit]);
+
   return (
     <React.Fragment>
       <Cards

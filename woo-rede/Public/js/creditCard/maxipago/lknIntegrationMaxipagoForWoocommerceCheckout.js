@@ -8,10 +8,11 @@ const nonceMaxipagoCredit = settingsMaxipagoCredit.nonceMaxipagoCredit;
 const translationsMaxipagoCredit = settingsMaxipagoCredit.translations;
 const ContentMaxipagoCredit = props => {
   const totalAmountFloat = settingsMaxipagoCredit.cartTotal;
-  const [selectedValue, setSelectedValue] = window.wp.element.useState('');
+  const [selectedValue, setSelectedValue] = window.wp.element.useState('1');
   const handleSortChange = event => {
-    setSelectedValue(event.target.value);
-    updateCreditObject('maxipago_credit_installments', event.target.value);
+    const value = String(event.target.value); // Garante que seja string
+    setSelectedValue(value);
+    updateCreditObject('maxipago_credit_installments', value);
   };
   const {
     eventRegistration,
@@ -33,79 +34,101 @@ const ContentMaxipagoCredit = props => {
   const [focus, setFocus] = window.wp.element.useState('');
   const [options, setOptions] = window.wp.element.useState([]);
 
-  // Função para buscar dados atualizados do backend e gerar as opções de installments
-  const generateInstallmentOptions = async () => {
-    try {
-      window.jQuery.ajax({
-        url: window.ajaxurl || '/wp-admin/admin-ajax.php',
-        type: 'POST',
-        dataType: 'json',
-        data: {
-          action: 'lkn_get_maxipago_credit_data'
-        },
-        success: function (response) {
-          if (response && response.installments) {
-            const newOptions = response.installments.map(installment => {
-              // Extrai o texto plano do HTML (remove tags)
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = installment.label;
-              const plainText = tempDiv.textContent || tempDiv.innerText || '';
+  // Função para buscar dados atualizados do backend e gerar as opções de installments (com debounce)
+  let installmentTimeout = null;
+  const generateMaxipagoInstallmentOptions = async () => {
+    if (installmentTimeout) clearTimeout(installmentTimeout);
+    installmentTimeout = setTimeout(() => {
+      try {
+        window.jQuery.ajax({
+          url: window.ajaxurl || '/wp-admin/admin-ajax.php',
+          type: 'POST',
+          dataType: 'json',
+          data: {
+            action: 'lkn_get_maxipago_credit_data'
+          },
+          success: function (response) {
+            if (response && response.installments) {
+              const newOptions = response.installments.map(installment => {
+                // Extrai o texto plano do HTML (remove tags)
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = installment.label;
+                const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
-              return {
-                key: installment.key,
-                label: plainText
-              };
-            });
-            setOptions(newOptions);
+                return {
+                  key: installment.key,
+                  label: plainText
+                };
+              });
+              
+              // Remove todas as opções atuais e adiciona as novas
+              setOptions(newOptions);
+              
+              // Sempre garante que há uma opção selecionada válida
+              const currentSelection = selectedValue || '1';
+              const validOption = newOptions.find(opt => String(opt.key) === String(currentSelection));
+              
+              if (!validOption && newOptions.length > 0) {
+                // Se a seleção atual não é válida, seleciona a primeira opção
+                const firstOption = String(newOptions[0].key);
+                setSelectedValue(firstOption);
+                updateCreditObject('maxipago_credit_installments', firstOption);
+              } else if (validOption && selectedValue !== String(validOption.key)) {
+                // Se a opção é válida mas o state não está sincronizado, atualiza
+                setSelectedValue(String(validOption.key));
+                updateCreditObject('maxipago_credit_installments', String(validOption.key));
+              }
+            }
           }
-        }
-      });
-    } catch (error) { }
+        });
+      } catch (error) { }
+    }, 400); // 400ms de debounce
   };
 
-  // Intercepta fetch e XMLHttpRequest para WooCommerce Blocks e atualiza parcelas após requisições relevantes
+  // Intercepta requisições para atualizar parcelas após mudanças no shipping
   window.wp.element.useEffect(() => {
-    generateInstallmentOptions();
+    // Chama só uma vez ao carregar a página
+    generateMaxipagoInstallmentOptions();
 
-    // Intercepta fetch
+    // Intercepta o fetch original para capturar requisições de shipping
     const originalFetch = window.fetch;
-    window.fetch = async function (...args) {
-      const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-      const isWooBlocksRequest = url.includes('/wp-json/wc/store/v1/batch') || url.includes('/wp-json/wc/store/v1/cart/select-shipping-rate') || url.includes('/wp-json/wc/store/v1/cart');
-      const response = await originalFetch.apply(this, args);
-      if (isWooBlocksRequest) {
-        response.clone().json().then(() => {
-          generateInstallmentOptions();
-        }).catch(() => {
-          generateInstallmentOptions();
+    window.fetch = function(...args) {
+      const [url, options] = args;
+      
+      // Verifica se é uma requisição para select-shipping-rate
+      if (url && url.includes('/wp-json/wc/store/v1/cart/select-shipping-rate')) {
+        // Executa a requisição original
+        return originalFetch.apply(this, args).then(response => {
+          // Clona a response para poder ler o conteúdo
+          const responseClone = response.clone();
+          
+          // Verifica se a requisição foi bem-sucedida
+          if (response.ok) {
+            // Aguarda um breve momento para a atualização do carrinho e então atualiza as parcelas
+            setTimeout(() => {
+              // Limpa as opções atuais e busca as novas
+              setOptions([]);
+              setSelectedValue('1');
+              updateCreditObject('maxipago_credit_installments', '1');
+              generateMaxipagoInstallmentOptions();
+            }, 500);
+          }
+          
+          // Retorna a response original
+          return response;
+        }).catch(error => {
+          // Em caso de erro, retorna a response original
+          return originalFetch.apply(this, args);
         });
       }
-      return response;
+      
+      // Para outras requisições, executa normalmente
+      return originalFetch.apply(this, args);
     };
 
-    // Intercepta XMLHttpRequest
-    const originalOpen = window.XMLHttpRequest.prototype.open;
-    window.XMLHttpRequest.prototype.open = function (...args) {
-      this._url = args[1];
-      return originalOpen.apply(this, args);
-    };
-    const originalSend = window.XMLHttpRequest.prototype.send;
-    window.XMLHttpRequest.prototype.send = function (...args) {
-      this.addEventListener('load', function () {
-        if (this._url && (
-          this._url.includes('/wp-json/wc/store/v1/batch') ||
-          this._url.includes('/wp-json/wc/store/v1/cart/select-shipping-rate')
-        )) {
-          generateInstallmentOptions();
-        }
-      });
-      return originalSend.apply(this, args);
-    };
-
+    // Cleanup: restaura o fetch original quando o componente é desmontado
     return () => {
       window.fetch = originalFetch;
-      window.XMLHttpRequest.prototype.open = originalOpen;
-      window.XMLHttpRequest.prototype.send = originalSend;
     };
   }, []);
   const formatCreditCardNumber = value => {
@@ -163,7 +186,11 @@ const ContentMaxipagoCredit = props => {
   window.wp.element.useEffect(() => {
     const unsubscribe = onPaymentSetup(async () => {
       // Verifica se todos os campos do creditObject estão preenchidos
-      const allFieldsFilled = Object.values(creditObject).every(field => field.trim() !== '');
+      const allFieldsFilled = Object.values(creditObject).every(field => {
+        // Garante que o campo seja uma string antes de chamar trim()
+        const fieldStr = typeof field === 'string' ? field : String(field);
+        return fieldStr.trim() !== '';
+      });
       if (allFieldsFilled) {
         return {
           type: emitResponse.responseTypes.SUCCESS,

@@ -1,17 +1,15 @@
 <?php
 
-namespace Lkn\IntegrationRedeForWoocommerce\Includes;
+namespace Lknwoo\IntegrationRedeForWoocommerce\Includes;
 
 use Exception;
-use Lkn\IntegrationRedeForWoocommerce\Includes\LknIntegrationRedeForWoocommerceWcRedeAbstract;
+use Lknwoo\IntegrationRedeForWoocommerce\Includes\LknIntegrationRedeForWoocommerceWcRedeAbstract;
 use Symfony\Component\Console\Event\ConsoleEvent;
 use WC_Order;
 use WP_Error;
 
 final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationRedeForWoocommerceWcRedeAbstract
 {
-    public $api = null;
-
     public function __construct()
     {
         $this->id = 'rede_credit';
@@ -43,7 +41,27 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             update_option('lknIntegrationRedeForWoocommerceSoftDescriptorErrorCredit', false);
         }
 
-        $this->auto_capture = sanitize_text_field($this->get_option('auto_capture')) == 'no' ? false : true;
+        // Auto capture com validação PRO - se não tiver licença PRO válida, força auto_capture como true
+        $auto_capture_option = $this->get_option('auto_capture');
+        if (!LknIntegrationRedeForWoocommerceHelper::isProLicenseValid()) {
+            // Se não tiver licença PRO válida, força auto_capture como 'yes' (true)
+            $auto_capture_option = 'yes';
+            // Persiste a alteração na base de dados
+            $settings = get_option('woocommerce_rede_credit_settings', array());
+            $settings['auto_capture'] = 'yes';
+            update_option('woocommerce_rede_credit_settings', $settings);
+        }
+        // Auto capture com validação PRO - se não tiver licença PRO válida, força auto_capture como true
+        $auto_capture_option = $this->get_option('auto_capture');
+        if (!LknIntegrationRedeForWoocommerceHelper::isProLicenseValid()) {
+            // Se não tiver licença PRO válida, força auto_capture como 'yes' (true)
+            $auto_capture_option = 'yes';
+            // Persiste a alteração na base de dados
+            $settings = get_option('woocommerce_rede_credit_settings', array());
+            $settings['auto_capture'] = 'yes';
+            update_option('woocommerce_rede_credit_settings', $settings);
+        }
+        $this->auto_capture = sanitize_text_field($auto_capture_option) === 'no' ? false : true;
         $this->max_parcels_number = $this->get_option('max_parcels_number');
         $this->min_parcels_value = $this->get_option('min_parcels_value');
 
@@ -55,8 +73,6 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         $this->log = $this->get_logger();
 
         $this->configs = $this->getConfigsRedeCredit();
-
-        $this->api = new LknIntegrationRedeForWoocommerceWcRedeAPI($this);
     }
 
     /**
@@ -114,13 +130,94 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         return $configs;
     }
 
+    /**
+     * Formata o nome da bandeira com ícone de imagem (apenas para licença PRO)
+     */
+    private function formatBrandWithIcon($brandName): string
+    {
+        if (empty($brandName)) {
+            return '';
+        }
+
+        // Verificar se tem licença PRO válida
+        if (!LknIntegrationRedeForWoocommerceHelper::isProLicenseValid()) {
+            // Modo padrão: apenas retorna o nome da bandeira sem formatação
+            return esc_html($brandName);
+        }
+
+        // Modo PRO: aplicar formatação com ícone
+        // Normalizar o nome da bandeira (tudo minúsculo para comparação)
+        $normalizedBrand = strtolower(trim($brandName));
+        
+        // Mapear variações de bandeiras para arquivos de imagem
+        $brandMappings = array(
+            'visa' => array('visa', 'visa electron', 'visa debit', 'visa credit'),
+            'mastercard' => array('mastercard', 'master', 'master card'),
+            'amex' => array('american express', 'amex', 'american', 'express'),
+            'elo' => array('elo', 'elo credit', 'elo debit'),
+            'hipercard' => array('hipercard', 'hiper', 'hiper card'),
+            'diners' => array('diners club', 'diners', 'dinners club'),
+            'discover' => array('discover', 'discover card'),
+            'jcb' => array('jcb', 'jcb card'),
+            'aura' => array('aura', 'aura card'),
+            'paypal' => array('paypal', 'pay pal')
+        );
+
+        // Buscar qual bandeira corresponde ao nome recebido
+        $detectedBrand = 'other';
+        $displayName = ucfirst($normalizedBrand);
+        
+        foreach ($brandMappings as $brandKey => $variations) {
+            foreach ($variations as $variation) {
+                // Verifica se o nome contém a variação ou vice-versa
+                if (strpos($normalizedBrand, $variation) !== false || strpos($variation, $normalizedBrand) !== false) {
+                    $detectedBrand = $brandKey;
+                    $displayName = ucfirst($brandKey);
+                    break 2; // Sair dos dois loops
+                }
+            }
+        }
+
+        // Definir o caminho base das imagens
+        $imagesPath = plugin_dir_url(INTEGRATION_REDE_FOR_WOOCOMMERCE_FILE) . 'Includes/assets/cardBrands/';
+        
+        // Nome do arquivo de imagem
+        $imageName = $detectedBrand . '.webp';
+        
+        $imageHtml = sprintf(
+            '<img src="%s" alt="%s" style="width: 20px; height: auto; margin-right: 5px; vertical-align: middle;" /> %s',
+            esc_url($imagesPath . $imageName),
+            esc_attr($displayName),
+            esc_html($brandName) // Mantém o nome original da bandeira para exibição
+        );
+        
+        return $imageHtml;
+    }
+
     public function displayMeta($order): void
     {
         if ($order->get_payment_method() === 'rede_credit') {
+            // Verificar licença PRO no topo para múltiplas verificações
+            $isProValid = LknIntegrationRedeForWoocommerceHelper::isProLicenseValid();
+            
+            // Tentar preencher metadados faltantes usando TID se disponível
+            $tid = $order->get_meta('_wc_rede_transaction_id');
+            if (!empty($tid)) {
+                // Verificar se brand ou reference estão faltando
+                $missing_brand = empty($order->get_meta('_wc_rede_transaction_brand'));
+                $missing_reference = empty($order->get_meta('_wc_rede_transaction_reference'));
+                
+                if ($missing_brand || $missing_reference) {
+                    // Buscar dados completos da transação e preencher metadados faltantes
+                    LknIntegrationRedeForWoocommerceHelper::getTransactionCompleteData($tid, $this, $order);
+                }
+            }
+            
             $metaKeys = array(
                 '_wc_rede_transaction_environment' => esc_attr__('Environment', 'woo-rede'),
                 '_wc_rede_transaction_return_code' => esc_attr__('Return Code', 'woo-rede'),
                 '_wc_rede_transaction_return_message' => esc_attr__('Return Message', 'woo-rede'),
+                '_wc_rede_transaction_reference' => esc_attr__('Reference', 'woo-rede'),
                 '_wc_rede_transaction_id' => esc_attr__('Transaction ID', 'woo-rede'),
                 '_wc_rede_transaction_refund_id' => esc_attr__('Refund ID', 'woo-rede'),
                 '_wc_rede_transaction_cancel_id' => esc_attr__('Cancellation ID', 'woo-rede'),
@@ -128,14 +225,56 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 '_wc_rede_transaction_authorization_code' => esc_attr__('Authorization Code', 'woo-rede'),
                 '_wc_rede_transaction_bin' => esc_attr__('Bin', 'woo-rede'),
                 '_wc_rede_transaction_last4' => esc_attr__('Last 4', 'woo-rede'),
-                '_wc_rede_transaction_brand' => esc_attr__('Brand', 'woo-rede'),
                 '_wc_rede_transaction_installments' => esc_attr__('Installments', 'woo-rede'),
                 '_wc_rede_transaction_holder' => esc_attr__('Cardholder', 'woo-rede'),
                 '_wc_rede_transaction_expiration' => esc_attr__('Card Expiration', 'woo-rede')
             );
 
-            $this->generateMetaTable($order, $metaKeys, 'Rede');
+            // Adicionar campo da bandeira apenas na versão PRO
+            if ($isProValid) {
+                $metaKeys['_wc_rede_transaction_brand'] = esc_attr__('Brand', 'woo-rede');
+            }
+
+            // Usar método personalizado ou padrão baseado na licença PRO
+            if ($isProValid) {
+                $this->generateMetaTableWithBrandIcon($order, $metaKeys, $this->title);
+            } else {
+                $this->generateMetaTable($order, $metaKeys, 'Rede');
+            }
         }
+    }
+
+    /**
+     * Método personalizado para exibir metadados com ícone da bandeira
+     */
+    private function generateMetaTableWithBrandIcon($order, $metaKeys, $title): void
+    {
+?>
+        <h3 style="margin-bottom: 14px;"><?php echo esc_html($title); ?></h3>
+        <table>
+            <tbody>
+                <?php
+                foreach ($metaKeys as $meta_key => $label) {
+                    $meta_value = $order->get_meta($meta_key);
+                    if (! empty($meta_value)) :
+                        // Se for o campo da bandeira, formatar com ícone
+                        if ($meta_key === '_wc_rede_transaction_brand') {
+                            $meta_value = $this->formatBrandWithIcon($meta_value);
+                        } else {
+                            $meta_value = esc_attr($meta_value);
+                        }
+                ?>
+                        <tr>
+                            <td style="color: #555; font-weight: bold;"><?php echo esc_attr($label); ?>:</td>
+                            <td><?php echo wp_kses_post($meta_value); ?></td>
+                        </tr>
+                <?php
+                    endif;
+                }
+                ?>
+            </tbody>
+        </table>
+<?php
     }
 
     public function initFormFields(): void
@@ -153,16 +292,33 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 'type' => 'checkbox',
                 'label' => esc_attr__('Enables payment with Rede', 'woo-rede'),
                 'default' => $options['enabled'] ?? 'no',
+                'desc_tip'    => esc_attr__('Check this box and save to enable credit card settings.', 'woo-rede'),
+                // TODO Fix: component out of the scope
+                // 'description' => esc_attr__('Enable or disable the credit card payment method.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Enable this option to allow customers to pay with credit cards using Rede API.', 'woo-rede')
+                )
             ),
             'title' => array(
                 'title' => esc_attr__('Title', 'woo-rede'),
                 'type' => 'text',
                 'default' => esc_attr__('Pay with the Rede Credit', 'woo-rede'),
+                'desc_tip' => esc_attr__('Enter the title that will be shown to customers during the checkout process.', 'woo-rede'),
+                'description' => esc_attr__('This controls the title which the user sees during checkout.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('This text will appear as the payment method title during checkout. Choose something your customers will easily understand, like “Pay with credit card (Rede)”.', 'woo-rede')
+                )
+
             ),
             'description' => array(
-                'title' => __('Description', 'woo-rede'),
+                'title' => esc_attr__('Description', 'woo-rede'),
                 'type' => 'textarea',
-                'default' => __('Pay for your purchase with a credit card through ', 'woo-rede'),
+                'default' => esc_attr__('Pay for your purchase with a credit card through ', 'woo-rede'),
+                'desc_tip' => esc_attr__('This description appears below the payment method title at checkout. Use it to inform your customers about the payment processing details.', 'woo-rede'),
+                'description' => esc_attr__('Payment method description that the customer will see on your checkout.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Provide a brief message that informs the customer how the payment will be processed. For example: “Your payment will be securely processed by Rede.”', 'woo-rede')
+                )
             ),
             'rede' => array(
                 'title' => esc_attr__('General', 'woo-rede'),
@@ -172,55 +328,74 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 'title' => esc_attr__('Environment', 'woo-rede'),
                 'type' => 'select',
                 'description' => esc_attr__('Choose the environment', 'woo-rede'),
-                'desc_tip' => true,
+                'desc_tip' => esc_attr__('Choose between production or development mode for Rede API.', 'woo-rede'),
                 'class' => 'wc-enhanced-select',
                 'default' => esc_attr__('test', 'woo-rede'),
                 'options' => array(
                     'test' => esc_attr__('Tests', 'woo-rede'),
                     'production' => esc_attr__('Production', 'woo-rede'),
                 ),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Select "Tests" to test transactions in sandbox mode. Use "Production" for real transactions.', 'woo-rede')
+                )
             ),
             'pv' => array(
                 'title' => esc_attr__('PV', 'woo-rede'),
                 'type' => 'password',
-                'description' => esc_attr__('Your Rede PV (affiliation number).', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => esc_attr__('Rede credentials.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Your Rede PV (affiliation number).', 'woo-rede'),
                 'default' => $options['pv'] ?? '',
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Your Rede PV (affiliation number) should be provided here.', 'woo-rede')
+                )
             ),
             'token' => array(
                 'title' => esc_attr__('Token', 'woo-rede'),
                 'type' => 'password',
-                'description' => esc_attr__('Your Rede Token.', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => esc_attr__('Rede credentials.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Your Rede Token.', 'woo-rede'),
                 'default' => $options['token'] ?? '',
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Your Rede Token should be placed here.', 'woo-rede')
+                )
             ),
 
             'enabled_soft_descriptor' => array(
                 'title' => __('Payment Description', 'woo-rede'),
                 'type' => 'checkbox',
-                'description' => __('Check this option to send the payment description in requests to Rede. If fatal errors occur due to the description, disable this option to ensure the correct processing of transactions.', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => esc_attr__('Enable sending the payment description to Rede.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Send payment description to the Rede. If errors occur, disable this option to ensure correct transaction processing.', 'woo-rede'),
                 'label' => __('I have enabled the payment description feature in the', 'woo-rede') . ' ' . wp_kses_post('<a href="' . esc_url('https://meu.userede.com.br/ecommerce/identificacao-fatura') . '" target="_blank">' . __('Rede Dashboard', 'woo-rede') . '</a>') . '. ' . __('Default (Disabled)', 'woo-rede'),
                 'default' => 'no',
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Send payment description to Rede. Disable if it causes errors.', 'woo-rede')
+                )
             ),
 
             'soft_descriptor' => array(
                 'title' => esc_attr__('Payment Description', 'woo-rede'),
                 'type' => 'text',
-                'description' => esc_attr__('Set the description to be sent to Rede along with the payment transaction.', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => esc_attr__('Description to be sent to Rede.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Set the description to be sent to Rede along with the payment transaction.', 'woo-rede'),
                 'custom_attributes' => array(
                     'maxlength' => 20,
                 ),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Payment description sent to Rede.', 'woo-rede'),
+                    'merge-top' => 'woocommerce_rede_credit_enabled_soft_descriptor'
+                )
             ),
 
             'enabled_fix_load_script' => array(
                 'title' => __('Load on checkout', 'woo-rede'),
                 'type' => 'checkbox',
-                'description' => __('By disabling this feature, the plugin will be loaded during the checkout process. This feature, when enabled, prevents infinite loading errors on the checkout page. Only disable it if you are experiencing difficulties with the gateway loading.', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => __('Disable to load the plugin during checkout.', 'woo-rede'),
+                'desc_tip' => __('Disable to load the plugin during checkout. Enable to prevent infinite loading errors.', 'woo-rede'),
                 'label' => __('Load plugin on checkout. Default (enabled)', 'woo-rede'),
                 'default' => 'yes',
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__("This feature controls the plugin's loading on the checkout page. It's enabled by default to prevent infinite loading errors and should only be disabled if you're experiencing issues with the gateway.", 'woo-rede')
+                )
             ),
 
             'credit_options' => array(
@@ -230,10 +405,15 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
 
             'min_parcels_value' => array(
                 'title' => esc_attr__('Value of the smallest installment', 'woo-rede'),
-                'type' => 'text',
-                'default' => '5',
-                'description' => esc_attr__('Set the minimum allowed amount for each installment in credit transactions.', 'woo-rede'),
-                'desc_tip' => true,
+                'type' => 'number',
+                'default' => 5,
+                'description' => esc_attr__('Set the minimum installment value for credit card payments. Accepted minimum value by REDE: 5.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Set the minimum allowed amount for each installment in credit transactions.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'min' => 5,
+                    'step' => 'any',
+                    'data-title-description' => esc_attr__('Enter the minimum value each installment must have.', 'woo-rede')
+                )
             ),
             'max_parcels_number' => array(
                 'title' => esc_attr__('Max installments', 'woo-rede'),
@@ -254,8 +434,28 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                     '11' => '11x',
                     '12' => '12x',
                 ),
-                'description' => esc_attr__('Set the maximum number of installments allowed in credit transactions.', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => esc_attr__('Define the maximum number of credit installments.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Set the maximum number of installments allowed in credit transactions.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Choose the maximum number of installments per order.', 'woo-rede')
+                )
+            ),
+
+            'payment_complete_status' => array(
+                'title' => esc_attr__('Payment Complete Status', 'woo-rede'),
+                'type' => 'select',
+                'class' => 'wc-enhanced-select',
+                'description' => esc_attr__('Choose what status to set orders after successful payment.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Select the order status that will be applied when payment is successfully processed.', 'woo-rede'),
+                'default' => 'processing',
+                'options' => array(
+                    'processing' => esc_attr__('Processing', 'woo-rede'),
+                    'completed' => esc_attr__('Completed', 'woo-rede'),
+                    'on-hold' => esc_attr__('On Hold', 'woo-rede'),
+                ),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Choose the status that approved payments should have. "Processing" is recommended for most cases.', 'woo-rede')
+                )
             ),
 
             'developers' => array(
@@ -268,8 +468,11 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 'type' => 'checkbox',
                 'label' => esc_attr__('Enable debug logs.', 'woo-rede') . ' ' . wp_kses_post('<a href="' . esc_url(admin_url('admin.php?page=wc-status&tab=logs')) . '" target="_blank">' . __('See logs', 'woo-rede') . '</a>'),
                 'default' => 'no',
-                'description' => esc_attr__('Enable transaction logging.', 'woo-rede'),
-                'desc_tip' => true,
+                'description' => esc_attr__('Enable this option to log payment requests and responses for troubleshooting purposes.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Enable transaction logging.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('When enabled, all Rede transactions will be logged.', 'woo-rede')
+                )
             )
         );
 
@@ -279,16 +482,26 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 'type' => 'checkbox',
                 'label' => sprintf('Habilita visualização do log da transação dentro do pedido.', 'woo-rede'),
                 'default' => 'no',
+                'description' => esc_attr__('Displays Rede transaction logs inside WooCommerce order details.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Useful for quickly viewing payment log data without accessing the system log files.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Enable this to show the transaction details for Rede payments directly in each order’s admin panel.', 'woo-rede')
+                )
             );
             $this->form_fields['clear_order_records'] =  array(
                 'title' => __('Limpar logs nos Pedidos', 'woo-rede'),
                 'type' => 'button',
                 'id' => 'validateLicense',
-                'class' => 'woocommerce-save-button components-button is-primary'
+                'class' => 'woocommerce-save-button components-button is-primary',
+                'description' => esc_attr__('Click this button to delete all Rede log data stored in orders.', 'woo-rede'),
+                'desc_tip' => esc_attr__('Use only if you no longer need the Rede transaction logs for past orders.', 'woo-rede'),
+                'custom_attributes' => array(
+                    'data-title-description' => esc_attr__('Choose the maximum number of installments per order.', 'woo-rede')
+                )
             );
         }
 
-        $customConfigs = apply_filters('integrationRedeGetCustomConfigs', $this->form_fields, array(
+        $customConfigs = apply_filters('integration_rede_for_woocommerce_get_custom_configs', $this->form_fields, array(
             'installment_interest' => $this->get_option('installment_interest'),
             'max_parcels_number' => $this->get_option('max_parcels_number'),
         ), $this->id);
@@ -301,7 +514,6 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
     public function getInstallments($order_total = 0)
     {
         $installments = array();
-        $customLabel = null;
         $defaults = array(
             'min_value' => str_replace(',', '.', $this->min_parcels_value),
             'max_parcels' => $this->max_parcels_number,
@@ -312,32 +524,45 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         $min_value = (float) $installments_result['min_value'];
         $max_parcels = (int) $installments_result['max_parcels'];
 
+        // Limita ao menor valor de parcelas permitido entre os produtos do carrinho
+        if (function_exists('WC') && WC()->cart && !WC()->cart->is_empty()) {
+            foreach (WC()->cart->get_cart() as $cart_item) {
+                $product_id = $cart_item['product_id'];
+                if ($this->id == 'rede_credit') {
+                    $product_limit = get_post_meta($product_id, 'lknRedeProdutctInterest', true);
+                } else {
+                    $product_limit = get_post_meta($product_id, 'lknMaxipagoProdutctInterest', true);
+                }
+                
+                if ($product_limit !== 'default' && is_numeric($product_limit)) {
+                    $product_limit = (int) $product_limit;
+                    if ($product_limit > 0 && $product_limit < $max_parcels) {
+                        $max_parcels = $product_limit;
+                    }
+                }
+            }
+        }
+
         for ($i = 1; $i <= $max_parcels; ++$i) {
-            if (($order_total / $i) < $min_value) {
-                break;
-            }
+            // Para 1x à vista, sempre permite mesmo se for menor que o valor mínimo
+            if ($i === 1 || ($order_total / $i) >= $min_value) {
+                $customLabel = null; // Resetar a variável a cada iteração
+                $interest = round((float) $this->get_option($i . 'x'), 2);
+                $label = sprintf('%dx de %s', $i, wp_strip_all_tags(wc_price($order_total / $i)));
 
-            $interest = round((float) $this->get_option($i . 'x'), 2);
-            $label = sprintf('%dx de %s', $i, wp_strip_all_tags(wc_price($order_total / $i)));
+                if (($this->get_option('installment_interest') == 'yes' || $this->get_option('installment_discount') == 'yes') && is_plugin_active('rede-for-woocommerce-pro/rede-for-woocommerce-pro.php')) {
+                    $customLabel = LknIntegrationRedeForWoocommerceHelper::lknIntegrationRedeProRedeInterest($order_total, $interest, $i, 'label', $this);
+                }
 
-            if ($this->get_option('installment_interest') == 'yes' || $this->get_option('installment_discount') == 'yes') {
+                if (gettype($customLabel) === 'string' && $customLabel) {
+                    $label = $customLabel;
+                }
 
-                $customLabel = apply_filters('integrationRedeGetInterest', $order_total, $interest, $i, 'label', $this);
-            }
+                $has_interest_or_discount = (
+                    $this->get_option('installment_interest') === 'yes' ||
+                    $this->get_option('installment_discount') === 'yes'
+                );
 
-            if (gettype($customLabel) === 'string' && $customLabel) {
-                $label = $customLabel;
-            }
-
-            $has_interest_or_discount = (
-                $this->get_option('installment_interest') === 'yes' ||
-                $this->get_option('installment_discount') === 'yes'
-            );
-
-            if (
-                ($has_interest_or_discount && $customLabel !== null) ||
-                !$has_interest_or_discount
-            ) {
                 $installments[] = array(
                     'num'   => $i,
                     'label' => $label,
@@ -378,7 +603,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         wp_enqueue_script('woo-rede-animated-card-jquery', $plugin_url . 'Public/js/jquery.card.js', array('jquery', 'woo-rede-js'), '2.5.0', true);
 
 
-        apply_filters('integrationRedeSetCustomCSSPro', get_option('woocommerce_rede_credit_settings')['custom_css_short_code'] ?? false);
+        apply_filters('integration_rede_for_woocommerce_set_custom_css', get_option('woocommerce_rede_credit_settings')['custom_css_short_code'] ?? false);
     }
 
     public function regOrderLogs($orderId, $order_total, $installments, $cardData, $transaction, $order, $brand = null): void
@@ -386,14 +611,14 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         if ('yes' == $this->debug) {
             $tId = null;
             $returnCode = null;
+            
             if ($brand === null && $transaction) {
                 $brand = null;
-                if (method_exists($transaction, 'getTid')) {
-                    $tId = $transaction->getTid();
+                if (is_array($transaction)) {
+                    $tId = $transaction['tid'] ?? null;
+                    $returnCode = $transaction['returnCode'] ?? null;
                 }
-                if (method_exists($transaction, 'getReturnCode')) {
-                    $returnCode = $transaction->getReturnCode();
-                }
+                
                 if ($tId) {
                     $brand = LknIntegrationRedeForWoocommerceHelper::getTransactionBrandDetails($tId, $this);
                 }
@@ -427,9 +652,6 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             );
 
             $bodyArray['cardData']['card_number'] = LknIntegrationRedeForWoocommerceHelper::censorString($bodyArray['cardData']['card_number'], 8);
-            if (gettype($transaction) != 'string' && !is_null($transaction->getCardNumber())) {
-                $transaction->setCardNumber(LknIntegrationRedeForWoocommerceHelper::censorString($transaction->getCardNumber(), 8));
-            }
 
             $orderLogsArray = array(
                 'body' => $bodyArray,
@@ -440,6 +662,126 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             $order->update_meta_data('lknWcRedeOrderLogs', $orderLogs);
             $order->save();
         }
+    }
+
+    /**
+     * Obtém token OAuth2
+     */
+    private function get_oauth_token()
+    {
+        $token = LknIntegrationRedeForWoocommerceHelper::get_rede_oauth_token_for_gateway($this->id);
+        
+        if ($token === null) {
+            throw new Exception('Não foi possível obter token de autenticação OAuth2 para ' . esc_html($this->id));
+        }
+        
+        return $token;
+    }
+
+    /**
+     * Processa status do pedido
+     */
+    private function process_order_status_v2($order, $transaction_response, $note = '')
+    {
+        $return_code = $transaction_response['returnCode'] ?? '';
+        $return_message = $transaction_response['returnMessage'] ?? '';
+        $capture = $transaction_response['capture'] ?? $this->auto_capture;
+
+        // Adiciona notas ao pedido
+        $status_note = sprintf('Rede[%s]', $return_message);
+        $order->add_order_note($status_note . ' ' . $note);
+
+        // Só altera o status se o pedido estiver pendente
+        if ($order->get_status() === 'pending') {
+            if ($return_code == '00') {
+                if ($capture) {
+                    // Status configurável pelo usuário para pagamentos aprovados com captura
+                    $payment_complete_status = $this->get_option('payment_complete_status', 'processing');
+                    $order->update_status($payment_complete_status);
+                    apply_filters("integration_rede_for_woocommerce_change_order_status", $order, $this);
+                } else {
+                    // Para pagamentos sem captura, sempre aguardando
+                    $order->update_status('on-hold');
+                    wc_reduce_stock_levels($order->get_id());
+                }
+            } else {
+                $order->update_status('failed', $status_note);
+            }
+        }
+
+        WC()->cart->empty_cart();
+    }
+
+    /**
+     * Processa transação de crédito
+     */
+    private function process_credit_transaction_v2($reference, $order_total, $installments, $cardData)
+    {
+        $access_token = $this->get_oauth_token();
+
+        $amount = str_replace(".", "", number_format($order_total, 2, '.', ''));
+        
+        if ($this->environment === 'production') {
+            $apiUrl = 'https://api.userede.com.br/erede/v2/transactions';
+        } else {
+            $apiUrl = 'https://sandbox-erede.useredecloud.com.br/v2/transactions';
+        }
+
+        $body = array(
+            'capture' => $this->auto_capture,
+            'kind' => 'credit',
+            'reference' => (string)$reference,
+            'amount' => (int)$amount,
+            'installments' => $installments,
+            'cardholderName' => $cardData['card_holder'],
+            'cardNumber' => $cardData['card_number'],
+            'expirationMonth' => (int)$cardData['card_expiration_month'],
+            'expirationYear' => (int)$cardData['card_expiration_year'],
+            'securityCode' => $cardData['card_cvv'],
+            'subscription' => false,
+            'origin' => 1,
+            'distributorAffiliation' => 0
+        );
+        
+        if ($this->get_option('enabled_soft_descriptor') === 'yes' && !empty($this->soft_descriptor)) {
+            $body['softDescriptor'] = $this->soft_descriptor;
+        }
+
+        $response = wp_remote_post($apiUrl, array(
+            'method' => 'POST',
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $access_token,
+                'Transaction-Response' => 'brand-return-opened'
+            ),
+            'body' => wp_json_encode($body),
+            'timeout' => 60
+        ));
+
+        if (is_wp_error($response)) {
+            throw new Exception('Erro na requisição: ' . esc_html($response->get_error_message()));
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        
+        if ($response_code !== 200 && $response_code !== 201) {
+            $error_message = 'Erro na transação';
+            if (isset($response_data['returnMessage'])) {
+                $error_message = $response_data['returnMessage'];
+            } elseif (isset($response_data['errors']) && is_array($response_data['errors'])) {
+                $error_message = implode(', ', $response_data['errors']);
+            }
+            throw new Exception(esc_html($error_message));
+        }
+        
+        if (!isset($response_data['returnCode']) || $response_data['returnCode'] !== '00') {
+            $error_message = isset($response_data['returnMessage']) ? $response_data['returnMessage'] : 'Transação recusada';
+            throw new Exception(esc_html($error_message));
+        }
+        
+        return $response_data;
     }
 
     public function process_payment($order_id)
@@ -518,19 +860,12 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
 
             $order_total = wc_format_decimal($order_total, $decimals);
 
+            $reference = $orderId . '-' . time();
+            
             try {
-                $transaction = $this->api->doTransactionCreditRequest($orderId + time(), $order_total, $installments, $cardData);
-                $this->regOrderLogs($orderId, $order_total, $installments, $cardData, $transaction, $order);
-            } catch (LknIntegrationRedeForWoocommerceTransactionException $e) {
-                $additionalData = $e->getAdditionalData();
-                $tid = $additionalData['tid'] ?? 'N/A';
-
-                $brand = LknIntegrationRedeForWoocommerceHelper::getTransactionBrandDetails($tid, $this);
-
-                $this->regOrderLogs($orderId, $order_total, $installments, $cardData, $e->getMessage(), $order, $brand);
-                throw $e;
+                $transaction_response = $this->process_credit_transaction_v2($reference, $order_total, $installments, $cardData);
+                $this->regOrderLogs($orderId, $order_total, $installments, $cardData, $transaction_response, $order);
             } catch (Exception $e) {
-                // Tratamento para outras exceções
                 $this->regOrderLogs($orderId, $order_total, $installments, $cardData, $e->getMessage(), $order);
                 throw $e;
             }
@@ -550,64 +885,50 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 }
             }
 
-            // Removed update to internal meta key '_transaction_id'.
-            $order->update_meta_data('_wc_rede_transaction_return_code', $transaction->getReturnCode());
-            $order->update_meta_data('_wc_rede_transaction_return_message', $transaction->getReturnMessage());
+            $order->update_meta_data('_wc_rede_transaction_return_code', $transaction_response['returnCode'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_return_message', $transaction_response['returnMessage'] ?? '');
             $order->update_meta_data('_wc_rede_transaction_installments', $installments);
-            $order->update_meta_data('_wc_rede_transaction_id', $transaction->getTid());
-            $order->update_meta_data('_wc_rede_transaction_refund_id', $transaction->getRefundId());
-            $order->update_meta_data('_wc_rede_transaction_cancel_id', $transaction->getCancelId());
-            $order->update_meta_data('_wc_rede_transaction_bin', $transaction->getCardBin());
-            $order->update_meta_data('_wc_rede_transaction_last4', $transaction->getLast4());
-            $order->update_meta_data('_wc_rede_transaction_brand', LknIntegrationRedeForWoocommerceHelper::getCardBrand($transaction->getTid(), $this));
-            $order->update_meta_data('_wc_rede_transaction_nsu', $transaction->getNsu());
-            $order->update_meta_data('_wc_rede_transaction_authorization_code', $transaction->getAuthorizationCode());
-            $order->update_meta_data('_wc_rede_captured', $transaction->getCapture());
+            $order->update_meta_data('_wc_rede_transaction_reference', $reference);
+            $order->update_meta_data('_wc_rede_transaction_id', $transaction_response['tid'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_refund_id', $transaction_response['refundId'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_cancel_id', $transaction_response['cancelId'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_bin', $transaction_response['cardBin'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_last4', $transaction_response['last4'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_brand', $transaction_response['brand']['name'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_nsu', $transaction_response['nsu'] ?? '');
+            $order->update_meta_data('_wc_rede_transaction_authorization_code', $transaction_response['brand']['authorizationCode'] ?? '');
+            $order->update_meta_data('_wc_rede_captured', $transaction_response['capture'] ?? $this->auto_capture);
             $order->update_meta_data('_wc_rede_total_amount', $order->get_total());
             $order->update_meta_data('_wc_rede_total_amount_converted', $order_total);
             $order->update_meta_data('_wc_rede_total_amount_is_converted', $convert_to_brl_enabled ? true : false);
             $order->update_meta_data('_wc_rede_exchange_rate', $exchange_rate_value);
             $order->update_meta_data('_wc_rede_decimal_value', $decimals);
 
-            $authorization = $transaction->getAuthorization();
-
-            if (! is_null($authorization)) {
-                $order->update_meta_data('_wc_rede_transaction_authorization_status', $authorization->getStatus());
+            if (isset($transaction_response['authorization'])) {
+                $order->update_meta_data('_wc_rede_transaction_authorization_status', $transaction_response['authorization']['status'] ?? '');
             }
 
-            $order->update_meta_data('_wc_rede_transaction_holder', $transaction->getCardHolderName());
+            $order->update_meta_data('_wc_rede_transaction_holder', $cardData['card_holder']);
             $order->update_meta_data('_wc_rede_transaction_expiration', sprintf('%02d/%d', $expiration[0], (int) ($expiration[1])));
-
-            $order->update_meta_data('_wc_rede_transaction_holder', $transaction->getCardHolderName());
-
-            $authorization = $transaction->getAuthorization();
-
-            if (! is_null($authorization)) {
-                $order->update_meta_data('_wc_rede_transaction_authorization_status', $authorization->getStatus());
-            }
 
             $order->update_meta_data('_wc_rede_transaction_environment', $this->environment);
 
-            $this->process_order_status($order, $transaction, '');
+            // Adaptar o process_order_status para trabalhar com array em vez de objeto SDK
+            $this->process_order_status_v2($order, $transaction_response, '');
 
             $order->save();
 
             if ('yes' == $this->debug) {
-                $tId = null;
-                $returnCode = null;
+                $tId = $transaction_response['tid'] ?? null;
+                $returnCode = $transaction_response['returnCode'] ?? null;
                 $brandDetails = null;
-                if (method_exists($transaction, 'getTid')) {
-                    $tId = $transaction->getTid();
-                }
-                if (method_exists($transaction, 'getReturnCode')) {
-                    $returnCode = $transaction->getReturnCode();
-                }
+                
                 if ($tId) {
                     $brandDetails = LknIntegrationRedeForWoocommerceHelper::getTransactionBrandDetails($tId, $this);
                 }
 
                 $this->log->log('info', $this->id, array(
-                    'transaction' => $transaction,
+                    'transaction' => $transaction_response,
                     'order' => array(
                         'orderId' => $orderId,
                         'amount' => $order_total,
@@ -615,8 +936,8 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                         'currencyConverted' => $convert_to_brl_enabled ? 'BRL' : null,
                         'exchangeRateValue' => $exchange_rate_value,
                         'status' => $order->get_status(),
-                        'brand' => isset($brandDetails['brand']) ? $brandDetails['brand'] : null,
-                        'returnCode' => isset($returnCode) ? $returnCode : null,
+                        'brand' => isset($brandDetails['brand']) ? $brandDetails['brand'] : ($transaction_response['card']['brand'] ?? null),
+                        'returnCode' => $returnCode,
                     ),
                 ));
             }
@@ -638,6 +959,56 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             'result' => 'success',
             'redirect' => $this->get_return_url($order),
         );
+    }
+
+    /**
+     * Processa reembolso
+     */
+    private function process_refund_v2($tid, $amount)
+    {
+        $access_token = $this->get_oauth_token();
+        
+        if ($this->environment === 'production') {
+            $apiUrl = 'https://api.userede.com.br/erede/v2/transactions/' . $tid . '/refunds';
+        } else {
+            $apiUrl = 'https://sandbox-erede.useredecloud.com.br/v2/transactions/' . $tid . '/refunds';
+        }
+
+        $amount_int = str_replace(".", "", number_format($amount, 2, '.', ''));
+        
+        $body = array(
+            'amount' => (int)$amount_int
+        );
+
+        $response = wp_remote_post($apiUrl, array(
+            'method' => 'POST',
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $access_token
+            ),
+            'body' => wp_json_encode($body),
+            'timeout' => 60
+        ));
+
+        if (is_wp_error($response)) {
+            throw new Exception('Erro na requisição de reembolso: ' . esc_html($response->get_error_message()));
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        
+        if ($response_code !== 200 && $response_code !== 201) {
+            $error_message = 'Erro no reembolso';
+            if (isset($response_data['message'])) {
+                $error_message = $response_data['message'];
+            } elseif (isset($response_data['errors']) && is_array($response_data['errors'])) {
+                $error_message = implode(', ', $response_data['errors']);
+            }
+            throw new Exception(esc_html($error_message));
+        }
+        
+        return $response_data;
     }
 
     public function process_refund($order_id, $amount = 0, $reason = '')
@@ -683,14 +1054,14 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                             $order->save();
                             return false;
                         } elseif ($order->get_total() == $amount || ($is_converted && $amount == $amount_converted)) {
-                            $transaction = $this->api->do_transaction_cancellation($tid, $amount);
+                            $refund_response = $this->process_refund_v2($tid, $amount);
                         }
 
-                        update_post_meta($order_id, '_wc_rede_transaction_refund_id', $transaction->getRefundId());
-                        if ($transaction->getCancelId() === null) {
-                            update_post_meta($order_id, '_wc_rede_transaction_cancel_id', $transaction->getTid());
+                        update_post_meta($order_id, '_wc_rede_transaction_refund_id', $refund_response['refundId'] ?? '');
+                        if (empty($refund_response['cancelId'])) {
+                            update_post_meta($order_id, '_wc_rede_transaction_cancel_id', $refund_response['tid'] ?? $tid);
                         } else {
-                            update_post_meta($order_id, '_wc_rede_transaction_cancel_id', $transaction->getCancelId());
+                            update_post_meta($order_id, '_wc_rede_transaction_cancel_id', $refund_response['cancelId']);
                         }
                         update_post_meta($order_id, '_wc_rede_transaction_canceled', true);
 
@@ -729,12 +1100,12 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         }
 
         $session = null;
+        // Buscar valor da sessão ao invés de fixar em 1
         $installments_number = 1;
         if (function_exists('WC') && WC()->session) {
-            $session = WC()->session;
-            $installments_number = $session->get('lkn_installments_number_rede_credit');
-            if (empty($installments_number)) {
-                $installments_number = 1;
+            $session_value = WC()->session->get('lkn_installments_number_rede_credit');
+            if (!empty($session_value) && is_numeric($session_value) && $session_value > 0) {
+                $installments_number = intval($session_value);
             }
         }
 
@@ -749,7 +1120,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         );
     }
     /**
-     * Renderiza os campos de pagamento com total atualizado (para AJAX)
+     * Renderiza campos de pagamento
      */
     public function render_payment_fields_with_total($order_total = null): void
     {
@@ -762,5 +1133,35 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         }
 
         $this->getCheckoutForm($order_total);
+    }
+
+    /**
+     * Processa as opções administrativas com reset de token OAuth2
+     * 
+     * @return bool
+     */
+    public function process_admin_options()
+    {
+        // Obter configurações atuais antes de salvar as novas
+        $old_settings = get_option('woocommerce_' . $this->id . '_settings', array());
+        $old_pv = isset($old_settings['pv']) ? $old_settings['pv'] : '';
+        $old_token = isset($old_settings['token']) ? $old_settings['token'] : '';
+
+        $saved = parent::process_admin_options();
+
+        // Verificar se PV ou Token foram alterados
+        $new_pv = $this->get_option('pv');
+        $new_token = $this->get_option('token');
+        
+        if ($old_pv !== $new_pv || $old_token !== $new_token) {
+            // Limpar tokens OAuth2 em cache para este gateway em ambos ambientes
+            $environments = array('test', 'production');
+            
+            foreach ($environments as $environment) {
+                delete_option('lkn_rede_oauth_token_' . $this->id . '_' . $environment);
+            }
+        }
+
+        return $saved;
     }
 }
