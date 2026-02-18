@@ -4,8 +4,12 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit2c3954392a1c2f6394e79826bad4b813
+class ComposerStaticInit8fb9bd71002677abaa2d4a0b2a16274b
 {
+    public static $files = array (
+        '3ba97ca81ce36db290399bc0a94d9f79' => __DIR__ . '/..' . '/helgesverre/toon/src/helpers.php',
+    );
+
     public static $prefixLengthsPsr4 = array (
         'P' =>
         array (
@@ -20,6 +24,10 @@ class ComposerStaticInit2c3954392a1c2f6394e79826bad4b813
             'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' => 48,
             'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' => 46,
             'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' => 43,
+        ),
+        'H' =>
+        array (
+            'HelgeSverre\\Toon\\' => 17,
         ),
     );
 
@@ -44,6 +52,10 @@ class ComposerStaticInit2c3954392a1c2f6394e79826bad4b813
         array (
             0 => __DIR__ . '/../..' . '/Admin',
         ),
+        'HelgeSverre\\Toon\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/helgesverre/toon/src',
+        ),
     );
 
     public static $classMap = array (
@@ -53,9 +65,9 @@ class ComposerStaticInit2c3954392a1c2f6394e79826bad4b813
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit2c3954392a1c2f6394e79826bad4b813::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit2c3954392a1c2f6394e79826bad4b813::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit2c3954392a1c2f6394e79826bad4b813::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit8fb9bd71002677abaa2d4a0b2a16274b::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit8fb9bd71002677abaa2d4a0b2a16274b::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit8fb9bd71002677abaa2d4a0b2a16274b::$classMap;
 
         }, null, ClassLoader::class);
     }

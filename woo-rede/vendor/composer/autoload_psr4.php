@@ -11,4 +11,5 @@ return array(
     'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' => array($baseDir . '/Public'),
     'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' => array($baseDir . '/Includes'),
     'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' => array($baseDir . '/Admin'),
+    'HelgeSverre\\Toon\\' => array($vendorDir . '/helgesverre/toon/src'),
 );
