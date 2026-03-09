@@ -121,6 +121,7 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
                     } else {
                         $order_total = $order->get_total();
                         $installment_value = $order_total / $saved_installments;
+                        /* translators: %1$d: number of installments, %2$s: installment price */
                         $installment_text = sprintf('%dx of %s', $saved_installments, wc_price($installment_value));
                     }
                     
@@ -158,7 +159,8 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
 
     final public function payment_fields(): void
     {
-        if ($description = $this->get_description()) {
+        if ($this->get_description()) {
+            $description = $this->get_description();
             echo wp_kses_post(wpautop($description));
         }
 
@@ -242,6 +244,7 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
      */
     final public function process_order_status($order, $transaction, $note = ''): void
     {
+        /* translators: %s: return message from payment processor */
         $status_note = sprintf('Rede[%s]', $transaction->getReturnMessage());
 
         $order->add_order_note($status_note . ' ' . $note);

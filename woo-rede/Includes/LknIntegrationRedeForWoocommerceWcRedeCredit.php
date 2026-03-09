@@ -249,7 +249,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
      */
     private function generateMetaTableWithBrandIcon($order, $metaKeys, $title): void
     {
-?>
+        ?>
         <h3 style="margin-bottom: 14px;"><?php echo esc_html($title); ?></h3>
         <table>
             <tbody>
@@ -274,7 +274,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
                 ?>
             </tbody>
         </table>
-<?php
+        <?php
     }
 
     public function initFormFields(): void
@@ -518,7 +518,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         }
 
         $this->form_fields['transactions'] = array(
-            'title' => esc_attr__('Transactions', 'lkn-wc-gateway-cielo'),
+            'title' => esc_attr__('Transactions', 'woo-rede'),
             'id' => 'transactions_title',
             'type'  => 'title',
         );
@@ -570,6 +570,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
             if ($i === 1 || ($order_total / $i) >= $min_value) {
                 $customLabel = null; // Resetar a variável a cada iteração
                 $interest = round((float) $this->get_option($i . 'x'), 2);
+                /* translators: %1$d: number of installments, %2$s: installment price */
                 $label = sprintf('%dx de %s', $i, wp_strip_all_tags(wc_price($order_total / $i)));
 
                 if (($this->get_option('installment_interest') == 'yes' || $this->get_option('installment_discount') == 'yes') && is_plugin_active('rede-for-woocommerce-pro/rede-for-woocommerce-pro.php')) {
@@ -614,7 +615,11 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
 
         wp_enqueue_style('card-style', $plugin_url . 'Public/css/card.css', array(), '1.0.0', 'all');
         wp_enqueue_style('select-style', $plugin_url . 'Public/css/lknIntegrationRedeForWoocommerceSelectStyle.css', array(), '1.0.0', 'all');
-        wp_enqueue_style('woo-rede-style', $plugin_url . 'Public/css/rede/styleRedeCredit.css', array(), '1.0.0', 'all');
+
+        // Enfileira CSS específico para débito apenas se não estiver enfileirado
+        if (!wp_style_is('rede-debit-style', 'enqueued')) {
+            wp_enqueue_style('rede-debit-style', $plugin_url . 'Public/css/rede/LknIntegrationRedeForWoocommerceCardShortcode.css', array(), '1.0.0', 'all');
+        }
 
         wp_enqueue_script('woo-rede-js', $plugin_url . 'Public/js/creditCard/rede/wooRedeCredit.js', array(), '1.0.0', true);
         wp_localize_script('woo-rede-js', 'wooRedeVars', array(
@@ -710,6 +715,7 @@ final class LknIntegrationRedeForWoocommerceWcRedeCredit extends LknIntegrationR
         $capture = $transaction_response['capture'] ?? $this->auto_capture;
 
         // Adiciona notas ao pedido
+        /* translators: %s: return message from payment processor */
         $status_note = sprintf('Rede[%s]', $return_message);
         $order->add_order_note($status_note . ' ' . $note);
 
