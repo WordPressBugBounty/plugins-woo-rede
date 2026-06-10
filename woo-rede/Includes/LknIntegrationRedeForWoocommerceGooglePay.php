@@ -520,7 +520,7 @@ final class LknIntegrationRedeForWoocommerceGooglePay extends LknIntegrationRede
 
             if ($convert_to_brl_enabled) {
                 $order->add_order_note(
-                    sprintf(
+                    '[' . $this->id . '] ' . sprintf(
                         /* translators: %s: The original order currency code (e.g., USD, EUR) that was converted to BRL. */
                         __('Order currency %s converted to BRL.', 'woo-rede'),
                         $order_currency
@@ -554,11 +554,12 @@ final class LknIntegrationRedeForWoocommerceGooglePay extends LknIntegrationRede
                 // Update order status based on configuration
                 $payment_complete_status = $this->get_option('payment_complete_status', 'processing');
                 if (!empty($payment_complete_status) && $payment_complete_status !== $order->get_status()) {
+                    $order->set_date_paid(current_time('timestamp', true));
                     $order->update_status($payment_complete_status);
                 }
 
                 // Add order note
-                $order->add_order_note(__('Payment completed via Google Pay', 'woo-rede'));
+                $order->add_order_note('[' . $this->id . '] ' . __('Payment completed via Google Pay', 'woo-rede'));
 
                 return array(
                     'result' => 'success',
@@ -567,7 +568,7 @@ final class LknIntegrationRedeForWoocommerceGooglePay extends LknIntegrationRede
             } else {
                 $error_message = isset($result['message']) ? $result['message'] : __('Payment failed', 'woo-rede');
                 /* translators: %s: The error message returned when a Google Pay payment fails. */
-                $order->add_order_note(sprintf(__('Google Pay payment failed: %s', 'woo-rede'), $error_message));
+                $order->add_order_note('[' . $this->id . '] ' . sprintf(__('Google Pay payment failed: %s', 'woo-rede'), $error_message));
                 wc_add_notice($error_message, 'error');
                 return array(
                     'result' => 'failure',
@@ -577,7 +578,7 @@ final class LknIntegrationRedeForWoocommerceGooglePay extends LknIntegrationRede
 
         } catch (Exception $e) {
             /* translators: %s: The error message returned when a Google Pay payment fails. */
-            $order->add_order_note(sprintf(__('Google Pay payment error: %s', 'woo-rede'), $e->getMessage()));
+            $order->add_order_note('[' . $this->id . '] ' . sprintf(__('Google Pay payment error: %s', 'woo-rede'), $e->getMessage()));
             wc_add_notice(__('Payment processing failed. Please try again.', 'woo-rede'), 'error');
             return array(
                 'result' => 'failure',

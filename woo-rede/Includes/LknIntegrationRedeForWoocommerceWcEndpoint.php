@@ -289,6 +289,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
                 if ("" == $paymentCompleteStatus) {
                     $paymentCompleteStatus = 'processing';
                 }
+                $order->set_date_paid(current_time('timestamp', true));
                 $order->update_status($paymentCompleteStatus);
                 break;
             case '9':
@@ -337,6 +338,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
                             $paymentCompleteStatus = 'processing';
                         }
                         
+                        $order->set_date_paid(current_time('timestamp', true));
                         $order->update_status($paymentCompleteStatus, __('PIX payment confirmed via webhook - FREE version', 'woo-rede'));
                         
                         // Limpar cron de verificação se existir
@@ -513,6 +515,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
                         $paymentCompleteStatus = 'processing';
                     }
                     
+                    $order->set_date_paid(current_time('timestamp', true));
                     $order->update_status($paymentCompleteStatus, __('PIX payment confirmed via webhook - PRO version', 'woo-rede'));
 
                     // Log 8: Finalização PRO
@@ -544,6 +547,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
                         ));
                     }
                     
+                    $order->set_date_paid(current_time('timestamp', true));
                     $order->update_status('processing', __('PIX payment confirmed via webhook - FREE version', 'woo-rede'));
                     
                     // Log 10: Finalização FREE
@@ -635,6 +639,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
             if ("" == $paymentCompleteStatus) {
                 $paymentCompleteStatus = 'processing';
             }
+            $order->set_date_paid(current_time('timestamp', true));
             $order->update_status($paymentCompleteStatus);
 
             $order->save();
@@ -683,7 +688,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
 
         // VALIDAÇÃO DE SEGURANÇA: Verifica autenticidade da requisição
         if (!$this->validate_webhook_security($order, $parameters, 'success')) {
-            $order->add_order_note(__('Security validation failed for 3DS webhook', 'woo-rede'));
+            $order->add_order_note('[' . $order->get_payment_method() . '] ' . __('Security validation failed for 3DS webhook', 'woo-rede'));
             return new WP_Error('security_validation_failed', __('Security validation failed', 'woo-rede'), array('status' => 403));
         }
 
@@ -695,7 +700,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
             wp_safe_redirect($redirect_url);
             exit;
         } catch (Exception $e) {
-            $order->add_order_note(__('Error processing 3DS success: ', 'woo-rede') . $e->getMessage());
+            $order->add_order_note('[' . $order->get_payment_method() . '] ' . __('Error processing 3DS success: ', 'woo-rede') . $e->getMessage());
             return new WP_REST_Response(array('status' => 'error', 'message' => $e->getMessage()), 500);
         }
     }
@@ -768,6 +773,39 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
         $gateway = $gateway_config['gateway_instance'];
         $gateway_settings = $gateway_config['settings'];
 
+        // Fallback nível 1: TID disponível → buscar objeto brand completo via API
+        if (empty($brand) && $gateway) {
+            $tid_for_brand = !empty($parameters['tid']) && trim($parameters['tid']) !== '' ? trim($parameters['tid']) : $order->get_meta('_wc_rede_transaction_id');
+            if (!empty($tid_for_brand)) {
+                $brand_details = LknIntegrationRedeForWoocommerceHelper::getTransactionBrandDetails($tid_for_brand, $gateway);
+                if (!empty($brand_details['brand']['name'])) {
+                    $brand = $brand_details['brand']['name'];
+                    $order->update_meta_data('_wc_rede_transaction_card_brand', ucfirst($brand));
+                    $order->update_meta_data('_wc_rede_brand_return_code', $brand_details['brand']['returnCode'] ?? '');
+                    $order->update_meta_data('_wc_rede_brand_tid', $brand_details['brand']['brandTid'] ?? '');
+                    $order->update_meta_data('_wc_rede_brand_authorization_code', $brand_details['brand']['authorizationCode'] ?? '');
+                    $order->update_meta_data('_wc_rede_brand_return_message', $brand_details['brand']['returnMessage'] ?? '');
+                }
+            }
+        }
+
+        // Fallback nível 2: sem TID (ex: returnCode 64) → detectar nome da bandeira pelo BIN
+        // Neste caso os campos brandTid/authorizationCode não existem pois não houve autorização
+        if (empty($brand)) {
+            $bin = $order->get_meta('_wc_rede_transaction_bin');
+            if (!empty($bin)) {
+                $brand_from_bin = LknIntegrationRedeForWoocommerceHelper::getBrandFromBin($bin);
+                if (!empty($brand_from_bin)) {
+                    $brand = $brand_from_bin;
+                    $order->update_meta_data('_wc_rede_transaction_card_brand', $brand);
+                    $order->update_meta_data('_wc_rede_brand_return_code', !empty($parameters['brand_returnCode']) && trim($parameters['brand_returnCode']) !== '' ? $parameters['brand_returnCode'] : '');
+                    $order->update_meta_data('_wc_rede_brand_tid', '');
+                    $order->update_meta_data('_wc_rede_brand_authorization_code', '');
+                    $order->update_meta_data('_wc_rede_brand_return_message', !empty($parameters['brand_returnMessage']) && trim($parameters['brand_returnMessage']) !== '' ? $parameters['brand_returnMessage'] : '');
+                }
+            }
+        }
+
         LknIntegrationRedeForWoocommerceHelper::saveTransactionMetadata(
             $order, 
             $error_webhook_data, 
@@ -793,8 +831,24 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
             $parameters['returnMessage'] ?? ''
         );
 
+        // Registrar logs de debug se habilitado
+        if (($gateway_settings['debug'] ?? 'no') === 'yes') {
+            $cardData = array(
+                'card_number' => $cardNumber,
+                'card_holder' => $cardHolder,
+                'card_expiration_month' => $order->get_meta('_wc_rede_transaction_expiration_month') ?: '**',
+                'card_expiration_year' => $order->get_meta('_wc_rede_transaction_expiration_year') ?: '****',
+                'card_cvv' => $order->get_meta('_wc_rede_transaction_cvv') ?: '***',
+                'card_type' => $saved_card_type,
+            );
+            if ($saved_card_type === 'credit') {
+                $cardData['installments'] = $saved_installments;
+            }
+            $this->regOrderLogs($order->get_id(), $order->get_total(), $cardData, $error_webhook_data, $order);
+        }
+
         // Marca pedido como falhado
-        $order->add_order_note(__('3D Secure authentication failed', 'woo-rede'));
+        $order->add_order_note('[' . $order->get_payment_method() . '] ' . __('3D Secure authentication failed', 'woo-rede'));
         $order->update_status('failed');
         $order->save();
         
@@ -827,23 +881,21 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
         // Adiciona informação sobre o tipo de cartão detectado na nota
         $card_type_note = sprintf(' [Card Type: %s, Capture: %s]', $saved_card_type, $capture ? 'Yes' : 'No');
         $status_note = sprintf('Rede[%s]', $return_message);
-        $order->add_order_note($status_note . ' ' . $note . $card_type_note);
+        $order->add_order_note('[' . $order->get_payment_method() . '] ' . $status_note . ' ' . $note . $card_type_note);
 
-        // Só altera o status se o pedido estiver pendente
-        if ($order->get_status() === 'pending') {
-            if ($return_code == '00') {
-                if ($capture) {
-                    // Status configurável pelo usuário para pagamentos aprovados com captura
-                    $payment_complete_status = $gateway_settings['payment_complete_status'] ?? 'processing';
-                    $order->update_status($payment_complete_status);
-                } else {
-                    // Para pagamentos credit sem captura, aguardando captura manual
-                    $order->update_status('on-hold', 'Pagamento autorizado, aguardando captura manual.');
-                    wc_reduce_stock_levels($order->get_id());
-                }
+        if ($return_code == '00') {
+            if ($capture) {
+                // Status configurável pelo usuário para pagamentos aprovados com captura
+                $payment_complete_status = $gateway_settings['payment_complete_status'] ?? 'processing';
+                $order->set_date_paid(current_time('timestamp', true));
+                $order->update_status($payment_complete_status);
             } else {
-                $order->update_status('failed', $status_note);
+                // Para pagamentos credit sem captura, aguardando captura manual
+                $order->update_status('on-hold', 'Pagamento autorizado, aguardando captura manual.');
+                wc_reduce_stock_levels($order->get_id());
             }
+        } else {
+            $order->update_status('failed', $status_note);
         }
     }
 
@@ -864,12 +916,27 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
                     $tId = $transaction['tid'] ?? null;
                     $returnCode = $transaction['returnCode'] ?? null;
                 }
-                
+
                 if ($tId) {
                     $brand = LknIntegrationRedeForWoocommerceHelper::getTransactionBrandDetails($tId, $gateway);
                 }
+
+                // Fallback: se brand ainda é null (sem TID ou falha na API), usar metadados salvos no pedido
+                if ($brand === null) {
+                    $brand_name = $order->get_meta('_wc_rede_transaction_card_brand');
+                    $brand = array(
+                        'brand' => array(
+                            'name'              => $brand_name ?: '',
+                            'returnCode'        => $order->get_meta('_wc_rede_brand_return_code') ?: '',
+                            'brandTid'          => $order->get_meta('_wc_rede_brand_tid') ?: '',
+                            'authorizationCode' => $order->get_meta('_wc_rede_brand_authorization_code') ?: '',
+                            'returnMessage'     => $order->get_meta('_wc_rede_brand_return_message') ?: '',
+                        ),
+                        'returnCode' => $order->get_meta('_wc_rede_brand_return_code') ?: '',
+                    );
+                }
             }
-            
+
             $default_currency = get_option('woocommerce_currency', 'BRL');
             $order_currency = method_exists($order, 'get_currency') ? $order->get_currency() : $default_currency;
             $currency_json_path = INTEGRATION_REDE_FOR_WOOCOMMERCE_DIR . 'Includes/files/linkCurrencies.json';
@@ -899,7 +966,7 @@ final class LknIntegrationRedeForWoocommerceWcEndpoint
                 'cardData' => $cardData,
                 'cardType' => $final_card_type,
                 'installments' => ($final_card_type === 'credit' && $final_installments >= 1) ? $final_installments : null,
-                'brand' => isset($tId) && isset($brand) ? $brand['brand'] : null,
+                'brand' => isset($brand['brand']) ? $brand['brand'] : null,
                 'returnCode' => isset($returnCode) ? $returnCode : null,
             );
 

@@ -247,7 +247,7 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
         /* translators: %s: return message from payment processor */
         $status_note = sprintf('Rede[%s]', $transaction->getReturnMessage());
 
-        $order->add_order_note($status_note . ' ' . $note);
+        $order->add_order_note('[' . $this->id . '] ' . $status_note . ' ' . $note);
 
         // Só altera o status se o pedido estiver pendente
         if ($order->get_status() === 'pending') {
@@ -255,6 +255,7 @@ abstract class LknIntegrationRedeForWoocommerceWcRedeAbstract extends WC_Payment
                 if ($transaction->getCapture()) {
                     // Status configurável pelo usuário para pagamentos aprovados
                     $payment_complete_status = $this->get_option('payment_complete_status', 'processing');
+                    $order->set_date_paid(current_time('timestamp', true));
                     $order->update_status($payment_complete_status);
                     apply_filters("integration_rede_for_woocommerce_change_order_status", $order, $this);
                 } else {
