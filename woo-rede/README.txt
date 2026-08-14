@@ -4,8 +4,8 @@ Contributors: linknacional
 Donate link: https://www.linknacional.com/wordpress/plugins/  
 Tags: rede, PIX, cartao credito, itau, pagamento  
 Requires at least: 6.0
-Tested up to: 7.0  
-Stable tag: 5.4.7
+Tested up to: 7.1  
+Stable tag: 5.4.8
 Requires PHP: 8.2
 License: GPLv3 or later  
 License URI: http://www.gnu.org/licenses/gpl-3.0.txt
@@ -124,6 +124,9 @@ A: Yes — tested up to WordPress 6.8.
 ---
 
 ## Changelog
+
+### 5.4.8 - 2026-08-14
+* Adjustment: Updated the notification text when detecting a frictionless 3DS payment.
 
 ### 5.4.7 - 2026-08-10
 * Security: Server-to-server validation added to PIX FREE webhook (redePixListenerLegacy) to prevent unauthenticated webhook forgery.
@@ -279,6 +282,9 @@ A: Yes — tested up to WordPress 6.8.
 ---
 
 ## Upgrade Notice
+
+### 5.4.8 - 2026-08-14
+* Adjustment: Updated the notification text when detecting a frictionless 3DS payment.
 
 ### 5.4.7 - 2026-08-10
 * Security: Server-to-server validation added to PIX FREE webhook (redePixListenerLegacy) to prevent unauthenticated webhook forgery.
