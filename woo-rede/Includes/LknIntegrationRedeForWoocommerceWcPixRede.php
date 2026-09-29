@@ -188,6 +188,20 @@ final class LknIntegrationRedeForWoocommerceWcPixRede extends WC_Payment_Gateway
                             'disabled' => 'disabled',
                         ),
                     ),
+                    'abecs_norms' => array(
+                        'title' => esc_attr__('ABECS standard messages', 'woo-rede'),
+                        'type' => 'checkbox',
+                        'label' => __('Enable ABECS-standard return messages', 'woo-rede'),
+                        'default' => LknIntegrationRedeForWoocommerceHelper::isAbecsEnabled($this->id) ? 'yes' : 'no',
+                        'desc_tip' => esc_attr__('Use the official e.Rede (ABECS) return messages instead of the default messages.', 'woo-rede'),
+                        'description' => esc_attr__('Default: enabled when the PRO license is active.', 'woo-rede'),
+                        'custom_attributes' => array_merge(
+                            array(
+                                'data-title-description' => esc_attr__('Use the official e.Rede (ABECS) return messages. Disable to keep the previous default messages.', 'woo-rede')
+                            ),
+                            ! LknIntegrationRedeForWoocommerceHelper::isProLicenseValid() ? array('lkn-pro-badge' => 'true') : array()
+                        ),
+                    ),
                     'developers' => array(
                         'title' => esc_attr__('Developer', 'woo-rede'),
                         'type' => 'title',
@@ -329,7 +343,7 @@ final class LknIntegrationRedeForWoocommerceWcPixRede extends WC_Payment_Gateway
                     );
                     $order->save();
                     
-                    throw new Exception(__('PV or Token is invalid!', 'woo-rede'));
+                    throw new Exception(LknIntegrationRedeForWoocommerceAbecsCodes::resolveForGateway($this->id, $pix['returnCode'], $pix['returnMessage'] ?? __('PV or Token is invalid!', 'woo-rede'), __('PV or Token is invalid!', 'woo-rede')));
                 }
                 if ("00" != $pix['returnCode']) {
                     if ('yes' == $this->debug) {
@@ -351,11 +365,11 @@ final class LknIntegrationRedeForWoocommerceWcPixRede extends WC_Payment_Gateway
                         $order, $customErrorResponse, isset($pix['tid']) ? $pix['tid'] : 'N/A', $pixExpiration, $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
                         1, $order->get_total(), $order_currency, '', $this->get_option('pv'), $this->get_option('token'),
                         $reference, $orderId, true, 'Pix', 'N/A',
-                        $this, '', '', '', $pix['returnCode'] ?? 33, $pix['returnMessage'] ?? __('An error occurred while processing the payment.', 'woo-rede')
+                        $this, '', '', '', $pix['returnCode'] ?? '', $pix['returnMessage'] ?? __('An error occurred while processing the payment.', 'woo-rede')
                     );
                     $order->save();
                     
-                    throw new Exception(__('An error occurred while processing the payment.', 'woo-rede'));
+                    throw new Exception(LknIntegrationRedeForWoocommerceAbecsCodes::resolveForGateway($this->id, $pix['returnCode'] ?? '', $pix['returnMessage'] ?? __('An error occurred while processing the payment.', 'woo-rede'), __('An error occurred while processing the payment.', 'woo-rede')));
                 }
 
                 // Validar se todos os campos necessários estão presentes na resposta PIX
@@ -491,6 +505,7 @@ final class LknIntegrationRedeForWoocommerceWcPixRede extends WC_Payment_Gateway
             return true;
         } else {
             $refund_message = isset($refund['returnMessage']) ? $refund['returnMessage'] : __('Refund failed.', 'woo-rede');
+            $refund_message = LknIntegrationRedeForWoocommerceAbecsCodes::resolveForGateway($this->id, $refund['returnCode'] ?? '', $refund_message);
             throw new Exception(esc_html($refund_message));
         }
     }

@@ -305,13 +305,35 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoCredit extends LknIntegrat
             );
         }
 
+        // Suporte WhatsApp: funcional só no PRO; no plano gratuito fica cinza (badge PRO).
+        $this->form_fields['send_configs'] = array(
+            'title' => __('WhatsApp Support', 'woo-rede'),
+            'type'  => 'button',
+            'id'    => 'sendConfigs',
+            'description' => __('Enable Debug Mode and click Save Changes to get quick support via WhatsApp.', 'woo-rede'),
+            'desc_tip' => '',
+            'disabled' => ! LknIntegrationRedeForWoocommerceHelper::isProLicenseValid(),
+            'custom_attributes' => array_merge(
+                array(
+                    'merge-top' => "woocommerce_{$this->id}_debug",
+                    'data-title-description' => __('Send the settings for this payment method to WordPress Support.', 'woo-rede')
+                ),
+                ! LknIntegrationRedeForWoocommerceHelper::isProLicenseValid() ? array('lkn-pro-badge' => 'true') : array()
+            )
+        );
+
         $customConfigs = apply_filters('integration_rede_for_woocommerce_get_custom_configs', $this->form_fields, array(
             'installment_interest' => $this->get_option('installment_interest'),
             'max_parcels_number' => $this->get_option('max_parcels_number'),
         ), $this->id);
 
-        if (! empty($customConfigs)) {
-            $this->form_fields = array_merge($this->form_fields, $customConfigs);
+        if (LknIntegrationRedeForWoocommerceHelper::isProLicenseValid()) {
+            if (! empty($customConfigs)) {
+                $this->form_fields = array_merge($this->form_fields, $customConfigs);
+            }
+        } else {
+            // Licença PRO inativa: replica os campos PRO como fakes interativos (selo PRO).
+            $this->form_fields = array_merge($this->form_fields, LknIntegrationRedeForWoocommerceHelper::lknRedeGetFakeProFields($this->id, $customConfigs, array_keys($this->form_fields)));
         }
     }
 
@@ -704,18 +726,20 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoCredit extends LknIntegrat
             $xml_decode = json_decode($xml_encode, true);
 
             // Adiciona nota de status do pagamento estilo Maxipago[Success.] ou Maxipago[Failed.]
+            $maxipago_processor_code = $xml_decode['processorCode'] ?? '';
+            $maxipago_processor_message = LknIntegrationRedeForWoocommerceAbecsCodes::translate($maxipago_processor_code, $xml_decode['processorMessage'] ?? '');
             if (isset($xml_decode['responseCode']) && "0" == $xml_decode['responseCode']) {
                 $order->add_order_note(
                     '[' . $this->id . '] ' . sprintf(
                         'Maxipago[Success.] %s',
-                        $xml_decode['processorMessage'] ?? ''
+                        $maxipago_processor_message
                     )
                 );
             } else {
                 $order->add_order_note(
                     '[' . $this->id . '] ' . sprintf(
                         'Maxipago[Failed.] %s',
-                        $xml_decode['processorMessage'] ?? ''
+                        $maxipago_processor_message
                     )
                 );
             }
@@ -764,7 +788,7 @@ final class LknIntegrationRedeForWoocommerceWcMaxipagoCredit extends LknIntegrat
                     $order->update_status('on-hold');
                 }
             } elseif (isset($xml_decode['responseCode']) && "1" == $xml_decode['responseCode']) {
-                throw new Exception($xml_decode['processorMessage']);
+                throw new Exception(LknIntegrationRedeForWoocommerceAbecsCodes::translate($xml_decode['processorCode'] ?? '', $xml_decode['processorMessage'] ?? ''));
             }
             if ('yes' == $this->debug) {
                 // Convert XML to array for manipulation
