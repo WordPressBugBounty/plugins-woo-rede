@@ -17,7 +17,7 @@ require_once __DIR__ . '/vendor/autoload.php';
  * Rename this for your plugin and update it as you release new versions.
  */
 if (! defined('INTEGRATION_REDE_FOR_WOOCOMMERCE_VERSION')) {
-    define('INTEGRATION_REDE_FOR_WOOCOMMERCE_VERSION', '5.5.0');
+    define('INTEGRATION_REDE_FOR_WOOCOMMERCE_VERSION', '5.5.1');
 }
 
 /**
@@ -29,7 +29,7 @@ if (! defined('INTEGRATION_REDE_FOR_WOOCOMMERCE_MIN_PRO_VERSION')) {
 }
 
 if (! defined('LKN_WC_REDE_WPP_NUMBER')) {
-    define('LKN_WC_REDE_WPP_NUMBER', '551135223406');
+    define('LKN_WC_REDE_WPP_NUMBER', '5516996537244');
 }
 
 if (! defined('INTEGRATION_REDE_FOR_WOOCOMMERCE_FILE')) {
