@@ -11,48 +11,48 @@ class ComposerStaticInit8fb9bd71002677abaa2d4a0b2a16274b
     );
 
     public static $prefixLengthsPsr4 = array (
-        'P' =>
+        'P' => 
         array (
             'Psr\\Log\\' => 8,
         ),
-        'M' =>
+        'M' => 
         array (
             'Monolog\\' => 8,
         ),
-        'L' =>
+        'L' => 
         array (
             'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' => 48,
             'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' => 46,
             'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' => 43,
         ),
-        'H' =>
+        'H' => 
         array (
             'HelgeSverre\\Toon\\' => 17,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'Psr\\Log\\' =>
+        'Psr\\Log\\' => 
         array (
             0 => __DIR__ . '/..' . '/psr/log/src',
         ),
-        'Monolog\\' =>
+        'Monolog\\' => 
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
         ),
-        'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' =>
+        'Lknwoo\\IntegrationRedeForWoocommerce\\PublicView\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Public',
         ),
-        'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' =>
+        'Lknwoo\\IntegrationRedeForWoocommerce\\Includes\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Includes',
         ),
-        'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' =>
+        'Lknwoo\\IntegrationRedeForWoocommerce\\Admin\\' => 
         array (
             0 => __DIR__ . '/../..' . '/Admin',
         ),
-        'HelgeSverre\\Toon\\' =>
+        'HelgeSverre\\Toon\\' => 
         array (
             0 => __DIR__ . '/..' . '/helgesverre/toon/src',
         ),

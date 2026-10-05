@@ -5,7 +5,7 @@ Donate link: https://www.linknacional.com/wordpress/plugins/
 Tags: rede, pix, cartao credito, itau, pagamento  
 Requires at least: 6.0
 Tested up to: 7.1  
-Stable tag: 5.5.1
+Stable tag: 5.5.2
 Requires PHP: 8.2
 License: GPL-3.0+  
 License URI: http://www.gnu.org/licenses/gpl-3.0.txt
@@ -128,6 +128,12 @@ A: Yes — tested up to [WordPress](https://www.linknacional.com.br/wordpress/) 
 ---
 
 == Changelog ==
+
+### 5.5.2 - 2026-10-05
+* Fix: infinite redirect loop (ERR_TOO_MANY_REDIRECTS) when another LKN plugin also opens its onboarding screen in the same request.
+* Fix: the close button (✕) of the PRO update screen now permanently dismisses the follow-up notice.
+* Fix: the "Update PRO plugin" button no longer interferes with another LKN gateway when both are active (JS global and click handler isolated per plugin).
+* Fix: the card gateways (Rede Credit, Maxipago Credit and Maxipago Debit) no longer reject cards with a valid future expiration date (MM/YY was parsed as day/month by the legacy strtotime check; now they use the same month/year rule already applied to Debit).
 
 ### 5.5.1 - 2026-10-01
 * Fix: debit card expiration date (MM/YY) is now validated correctly, avoiding false "expired" errors for future dates.
@@ -311,6 +317,9 @@ A: Yes — tested up to [WordPress](https://www.linknacional.com.br/wordpress/) 
 ---
 
 == Upgrade Notice ==
+
+### 5.5.2 - 2026-10-05
+* Fix: prevents a redirect loop between LKN onboarding screens, makes the update screen close button dismiss the notice, and fixes the card gateways (Rede/Maxipago Credit and Debit) rejecting cards with a valid future expiration date.
 
 ### 5.5.1 - 2026-10-01
 * Fix: debit card expiration date (MM/YY) is now validated correctly.
